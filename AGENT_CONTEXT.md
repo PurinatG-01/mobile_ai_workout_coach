@@ -63,6 +63,18 @@ No video streaming to backend.
 
 ---
 
+# Camera (Current)
+
+Native camera access is planned via the Flutter `camera` plugin.
+
+Implementation building blocks live under:
+
+- `lib/features/live_record_exercise/services/camera_service.dart`
+- `lib/features/live_record_exercise/services/camera_config.dart`
+- `lib/features/live_record_exercise/widgets/live_camera_preview.dart`
+
+---
+
 # Folder Structure (Epic-based)
 
 lib/

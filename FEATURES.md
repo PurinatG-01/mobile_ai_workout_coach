@@ -35,6 +35,12 @@ Key features (rough):
 - Basic feedback: simple cues (e.g., “go lower”, “full lockout”) with debouncing
 - Performance guardrails: avoid processing every frame; keep UI smooth
 
+Building blocks (current code):
+
+- Camera connection service: `lib/features/live_record_exercise/services/camera_service.dart`
+- Camera config: `lib/features/live_record_exercise/services/camera_config.dart`
+- Reusable preview widget: `lib/features/live_record_exercise/widgets/live_camera_preview.dart`
+
 Out of scope (for now):
 
 - Backend video upload/streaming

@@ -4,8 +4,8 @@
 - [x] 2 — CORE: Create lib feature folders
 - [x] 3 — UI: Workout screen app shell
 - [ ] 4 — CAM: Camera permission handling
-- [ ] 5 — CAM: Implement camera service
-- [ ] 6 — UI: Render camera preview
+- [x] 5 — CAM: Implement camera service (building block)
+- [x] 6 — UI: Render camera preview widget (building block)
 - [ ] 7 — CAM: Add frame processing throttle
 - [ ] 8 — POSE: Wrap ML Kit pose
 - [ ] 9 — POSE: Convert frames to input
