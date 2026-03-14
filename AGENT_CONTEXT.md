@@ -63,41 +63,35 @@ No video streaming to backend.
 
 ---
 
-# Folder Structure
+# Folder Structure (Epic-based)
 
 lib/
 
-camera/
+app/
 
-- camera_service.dart
-  Handles camera initialization and frame streaming.
+- app.dart
+  App shell (MaterialApp) and routing.
 
-pose/
+features/
 
-- pose_detector.dart
-  Wraps Google ML Kit pose detection.
+- live_record_exercise/
+  The real-time camera + pose + rep counting experience.
+  - screens/ (screens)
+  - widgets/ (shared UI widgets)
+  - services/ (camera + pose wrappers)
+  - (later) domain/ (state machine, counters)
 
-engine/
+- workout_log/
+  Local workout history and simple stats.
+  - screens/
+  - widgets/
+  - (later) data/ (storage)
+  - (later) domain/
 
-- landmark_mapper.dart
-- angle_calculator.dart
-- movement_phase.dart
-- rep_counter.dart
+shared/
 
-coach/
-
-- feedback_engine.dart
-  Provides coaching cues and warnings.
-
-models/
-
-- landmark.dart
-- exercise_state.dart
-
-ui/
-
-- workout_screen.dart
-  Main workout interface.
+- engine/ (math helpers like angle calculation)
+- models/ (shared models like exercise types)
 
 ---
 
