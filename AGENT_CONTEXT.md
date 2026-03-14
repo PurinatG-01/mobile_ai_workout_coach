@@ -34,7 +34,7 @@ Flutter (Dart)
 
 ### Pose Detection
 
-google_ml_kit_flutter (Google ML Kit Pose Detection)
+Planned: Google ML Kit Pose Detection (package TBD)
 
 ### Processing Strategy
 
@@ -70,7 +70,13 @@ lib/
 app/
 
 - app.dart
-  App shell (MaterialApp) and routing.
+  App entry (MaterialApp.router).
+
+- router.dart
+  Central `go_router` configuration.
+
+- shell/
+  AppShell scaffold (AppBar + bottom navigation).
 
 features/
 
@@ -92,6 +98,15 @@ shared/
 
 - engine/ (math helpers like angle calculation)
 - models/ (shared models like exercise types)
+
+---
+
+# Navigation (Current)
+
+The app uses a 2-tab shell aligned to the 2 epics:
+
+- Live Record Exercise: `/live`
+- Workout Log: `/log`
 
 ---
 

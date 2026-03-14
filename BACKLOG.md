@@ -1,6 +1,6 @@
 # TODO
 
-- [x] 1 — IOS: Fix iOS build toolchain
+- [x] 1 — IOS: Enable iOS simulator destinations (SUPPORTED_PLATFORMS)
 - [x] 2 — CORE: Create lib feature folders
 - [x] 3 — UI: Workout screen app shell
 - [ ] 4 — CAM: Camera permission handling
@@ -10,7 +10,7 @@
 - [ ] 8 — POSE: Wrap ML Kit pose
 - [ ] 9 — POSE: Convert frames to input
 - [ ] 10 — ENGINE: Landmark model and mapper
-- [ ] 11 — ENGINE: Angle calculator utility
+- [x] 11 — ENGINE: Angle calculator utility
 - [ ] 12 — ENGINE: Add smoothing for angles
 - [ ] 13 — ENGINE: Exercise state machine base
 - [ ] 14 — ENGINE: Squat phase thresholds
@@ -21,3 +21,4 @@
 - [ ] 19 — ENGINE: Tempo tracking per rep
 - [ ] 20 — COACH: Feedback engine minimal cues
 - [ ] 21 — UI: Performance stats display
+- [x] 22 — UI: Router + bottom navigation (Workout/Log)

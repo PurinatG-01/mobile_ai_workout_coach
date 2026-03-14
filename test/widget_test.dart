@@ -11,12 +11,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_ai_workout_coach/app/app.dart';
 
 void main() {
-  testWidgets('Workout screen renders', (WidgetTester tester) async {
+  testWidgets('Can navigate between Workout and Log',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const App());
-    expect(find.text('Workout'), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Workout'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Ready. Tap Start to begin.'), findsOneWidget);
     expect(find.text('Reps'), findsOneWidget);
     expect(find.text('Phase'), findsOneWidget);
     expect(find.text('Tempo'), findsOneWidget);
+
+    await tester.tap(find.text('Log'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Workout Log'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Workout log (WIP)'), findsOneWidget);
+
+    await tester.tap(find.text('Workout'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ready. Tap Start to begin.'), findsOneWidget);
   });
 }

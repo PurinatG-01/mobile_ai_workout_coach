@@ -8,7 +8,16 @@
 - Live Record Exercise code lives under `lib/features/live_record_exercise/`
 - Workout Log code lives under `lib/features/workout_log/`
 - Shared cross-epic code lives under `lib/shared/`
-- App entrypoints: `lib/main.dart` (bootstrap) and `lib/app/app.dart` (MaterialApp)
+- App entrypoints: `lib/main.dart` (bootstrap) and `lib/app/app.dart` (MaterialApp.router)
+- Router: `lib/app/router.dart`
+- Navigation shell: `lib/app/shell/app_shell.dart`
+
+## Navigation
+
+The current app navigation is epic-based and uses two routes:
+
+- Live Record Exercise: `/live`
+- Workout Log: `/log`
 
 ---
 

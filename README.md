@@ -1,16 +1,29 @@
 # mobile_ai_workout_coach
 
-A new Flutter project.
+On-device AI workout coach built with Flutter.
+
+Current MVP focus:
+
+- Live workout session screen (controls + placeholders)
+- Workout log screen (WIP)
+- App-wide navigation (2 tabs) using `go_router`
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+### Run
 
-A few resources to get you started if this is your first Flutter project:
+- `flutter pub get`
+- `flutter run`
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### Test
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- `flutter test`
+
+## Navigation
+
+The app has two epic-aligned screens, switched via bottom navigation:
+
+- Workout (Live Record Exercise) at `/live`
+- Log (Workout Log) at `/log`
+
+Flutter docs: https://docs.flutter.dev/
