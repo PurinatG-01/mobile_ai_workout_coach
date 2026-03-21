@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/models/exercise_type.dart';
+import '../services/camera_config.dart';
+import '../widgets/live_camera_connection.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -76,11 +78,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  _isRunning
-                      ? 'Camera preview (next)'
-                      : 'Ready. Tap Start to begin.',
-                  style: Theme.of(context).textTheme.titleMedium,
+                clipBehavior: Clip.antiAlias,
+                child: LiveCameraConnection(
+                  isActive: _isRunning,
+                  config: const LiveCameraConfig(),
+                  placeholder: Text(
+                    _isRunning
+                        ? 'Initializing camera...'
+                        : 'Ready. Tap Start to begin.',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),

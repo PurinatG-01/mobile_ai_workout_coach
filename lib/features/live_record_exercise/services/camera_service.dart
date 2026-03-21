@@ -25,6 +25,11 @@ class LiveCameraService {
 
   CameraController? get controller => _controller;
 
+  List<CameraDescription> get cameras =>
+      List.unmodifiable(_cameras ?? const []);
+
+  CameraDescription? get selectedCamera => _controller?.description;
+
   bool get isInitialized => _controller?.value.isInitialized ?? false;
 
   /// Initializes the camera controller.
@@ -36,8 +41,7 @@ class LiveCameraService {
   Future<void> initialize(LiveCameraConfig config) async {
     _ensureSupportedPlatform();
 
-    final cameras = _cameras ?? await availableCameras();
-    _cameras = cameras;
+    final cameras = await loadCameras();
     if (cameras.isEmpty) {
       throw StateError('No cameras available on this device.');
     }
@@ -46,12 +50,22 @@ class LiveCameraService {
     await _initializeControllerFor(selected, config);
   }
 
-  /// Switches between front and back camera when available.
-  Future<void> switchCamera(LiveCameraConfig config) async {
+  /// Loads and caches available cameras.
+  ///
+  /// Safe to call multiple times.
+  Future<List<CameraDescription>> loadCameras() async {
     _ensureSupportedPlatform();
 
     final cameras = _cameras ?? await availableCameras();
     _cameras = cameras;
+    return cameras;
+  }
+
+  /// Switches between front and back camera when available.
+  Future<void> switchCamera(LiveCameraConfig config) async {
+    _ensureSupportedPlatform();
+
+    final cameras = await loadCameras();
     if (cameras.isEmpty) {
       throw StateError('No cameras available on this device.');
     }
@@ -59,6 +73,26 @@ class LiveCameraService {
     final current = _controller?.description;
     final next = _selectNextCamera(cameras, current);
     await _initializeControllerFor(next, config);
+  }
+
+  /// Selects a specific camera.
+  Future<void> selectCamera(
+    CameraDescription description,
+    LiveCameraConfig config,
+  ) async {
+    _ensureSupportedPlatform();
+
+    final cameras = await loadCameras();
+    if (cameras.isEmpty) {
+      throw StateError('No cameras available on this device.');
+    }
+
+    final isKnown = cameras.any((c) => c.name == description.name);
+    if (!isKnown) {
+      throw ArgumentError('Selected camera is not available on this device.');
+    }
+
+    await _initializeControllerFor(description, config);
   }
 
   Future<void> dispose() async {
@@ -70,7 +104,8 @@ class LiveCameraService {
   }
 
   CameraDescription _selectDefaultCamera(List<CameraDescription> cameras) {
-    final back = cameras.where((c) => c.lensDirection == CameraLensDirection.back);
+    final back =
+        cameras.where((c) => c.lensDirection == CameraLensDirection.back);
     if (back.isNotEmpty) return back.first;
     return cameras.first;
   }

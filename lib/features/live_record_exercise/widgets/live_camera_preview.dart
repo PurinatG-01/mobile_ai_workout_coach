@@ -61,6 +61,33 @@ class LiveCameraPreview extends StatelessWidget {
       );
     }
 
-    return CameraPreview(controller);
+    // Avoid stretching: preserve the camera stream aspect ratio and let it
+    // “contain” within the available box.
+    //
+    // Note: `controller.value.aspectRatio` can be reported in the camera
+    // sensor/native orientation, which means it may need to be inverted when
+    // the UI is in portrait.
+    final uiOrientation = MediaQuery.of(context).orientation;
+    final previewSize = controller.value.previewSize;
+
+    double effectiveAspectRatio;
+    if (previewSize != null && previewSize.width > 0 && previewSize.height > 0) {
+      final previewAspect = previewSize.width / previewSize.height;
+      effectiveAspectRatio = uiOrientation == Orientation.portrait
+          ? (1 / previewAspect)
+          : previewAspect;
+    } else {
+      final reported = controller.value.aspectRatio;
+      final needsInversion = (uiOrientation == Orientation.portrait && reported > 1) ||
+          (uiOrientation == Orientation.landscape && reported < 1);
+      effectiveAspectRatio = needsInversion ? (1 / reported) : reported;
+    }
+
+    return Center(
+      child: AspectRatio(
+        aspectRatio: effectiveAspectRatio,
+        child: CameraPreview(controller),
+      ),
+    );
   }
 }
