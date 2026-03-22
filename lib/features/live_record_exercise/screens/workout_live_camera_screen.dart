@@ -15,10 +15,6 @@ class WorkoutLiveCameraScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Reserve space for the camera selector UI in the preview (top-right).
-    // This prevents the stats row from overlapping it.
-    const cameraSelectorReservedWidth = 180.0;
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(

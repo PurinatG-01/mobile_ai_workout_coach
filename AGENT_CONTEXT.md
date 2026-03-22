@@ -71,7 +71,11 @@ Implementation building blocks live under:
 
 - `lib/features/live_record_exercise/services/camera_service.dart`
 - `lib/features/live_record_exercise/services/camera_config.dart`
+- `lib/features/live_record_exercise/widgets/live_camera_connection.dart` (owns camera lifecycle + exposes external camera-controls builder)
 - `lib/features/live_record_exercise/widgets/live_camera_preview.dart`
+- `lib/features/live_record_exercise/widgets/camera_switcher.dart` (camera selection control)
+- `lib/features/live_record_exercise/screens/workout_live_camera_screen.dart` (full-screen camera + overlays)
+- `lib/features/live_record_exercise/widgets/workout_stats.dart` (overlay scaffold; placeholder values)
 
 ---
 
@@ -119,6 +123,10 @@ The app uses a 2-tab shell aligned to the 2 epics:
 
 - Live Record Exercise: `/live`
 - Workout Log: `/log`
+
+The live camera experience is a dedicated full-screen route rendered above the shell scaffold:
+
+- Live Camera: `/live/camera`
 
 ---
 

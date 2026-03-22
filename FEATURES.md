@@ -14,10 +14,14 @@
 
 ## Navigation
 
-The current app navigation is epic-based and uses two routes:
+The current app navigation is epic-based and uses two shell routes:
 
 - Live Record Exercise: `/live`
 - Workout Log: `/log`
+
+The live camera experience is a separate full-screen route rendered above the shell:
+
+- Live Camera: `/live/camera`
 
 ---
 
@@ -39,7 +43,11 @@ Building blocks (current code):
 
 - Camera connection service: `lib/features/live_record_exercise/services/camera_service.dart`
 - Camera config: `lib/features/live_record_exercise/services/camera_config.dart`
+- Camera connection widget (lifecycle + controls hook): `lib/features/live_record_exercise/widgets/live_camera_connection.dart`
 - Reusable preview widget: `lib/features/live_record_exercise/widgets/live_camera_preview.dart`
+- Camera selector control: `lib/features/live_record_exercise/widgets/camera_switcher.dart`
+- Full-screen live camera screen: `lib/features/live_record_exercise/screens/workout_live_camera_screen.dart`
+- Overlay stats widget (placeholder values today): `lib/features/live_record_exercise/widgets/workout_stats.dart`
 
 Out of scope (for now):
 

@@ -15,10 +15,14 @@
 - [ ] 13 — ENGINE: Exercise state machine base
 - [ ] 14 — ENGINE: Squat phase thresholds
 - [ ] 15 — ENGINE: Squat rep counter logic
-- [ ] 16 — UI: Overlay rep and phase UI
+- [x] 16 — UI: Overlay reps/phase/tempo UI (placeholder overlay)
 - [ ] 17 — UI: Debug landmarks/skeleton overlay
 - [ ] 18 — ENGINE: Push-up rep counter logic
 - [ ] 19 — ENGINE: Tempo tracking per rep
 - [ ] 20 — COACH: Feedback engine minimal cues
 - [ ] 21 — UI: Performance stats display
 - [x] 22 — UI: Router + bottom navigation (Workout/Log)
+
+Notes:
+
+- Item 16 is currently a UI overlay scaffold (`WorkoutStats`) and is not yet wired to pose/engine outputs.

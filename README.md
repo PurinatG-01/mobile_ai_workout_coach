@@ -26,4 +26,8 @@ The app has two epic-aligned screens, switched via bottom navigation:
 - Workout (Live Record Exercise) at `/live`
 - Log (Workout Log) at `/log`
 
+In addition, the live camera experience is a full-screen route (no app bar / no bottom tab bar):
+
+- Live Camera at `/live/camera`
+
 Flutter docs: https://docs.flutter.dev/
