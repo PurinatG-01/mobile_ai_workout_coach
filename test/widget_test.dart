@@ -23,10 +23,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Ready. Tap Start to begin.'), findsOneWidget);
-    expect(find.text('Reps'), findsOneWidget);
-    expect(find.text('Phase'), findsOneWidget);
-    expect(find.text('Tempo'), findsOneWidget);
+    expect(find.text('START'), findsOneWidget);
 
     await tester.tap(find.text('Log'));
     await tester.pumpAndSettle();
@@ -41,6 +38,6 @@ void main() {
 
     await tester.tap(find.text('Workout'));
     await tester.pumpAndSettle();
-    expect(find.text('Ready. Tap Start to begin.'), findsOneWidget);
+    expect(find.text('START'), findsOneWidget);
   });
 }

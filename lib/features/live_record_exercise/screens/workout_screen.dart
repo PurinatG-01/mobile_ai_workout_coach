@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/exercise_type.dart';
-import '../services/camera_config.dart';
-import '../widgets/live_camera_connection.dart';
+import '../../../app/router.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -15,10 +15,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   ExerciseType _exercise = ExerciseType.squat;
   bool _isRunning = false;
 
+  Future<void> _startWorkoutAndOpenCamera() async {
+    if (_isRunning) return;
+    setState(() => _isRunning = true);
+
+    // Push onto the root navigator so the live camera experience is truly
+    // full-screen (no AppShell app bar/bottom nav).
+    await context.push(AppRoutes.liveCamera);
+
+    // If the user backs out without stopping,
+    // keep the state consistent and stop recording.
+    if (!mounted) return;
+    if (_isRunning) {
+      _stopWorkout();
+    }
+  }
+
+  void _stopWorkout() {
+    setState(() => _isRunning = false);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -50,106 +68,25 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           },
                   ),
                 ),
-                const SizedBox(width: 12),
-                FilledButton(
-                  onPressed: _isRunning
-                      ? null
-                      : () {
-                          setState(() => _isRunning = true);
-                        },
-                  child: const Text('Start'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed: _isRunning
-                      ? () {
-                          setState(() => _isRunning = false);
-                        }
-                      : null,
-                  child: const Text('Stop'),
-                ),
               ],
             ),
             const SizedBox(height: 16),
+
+            // Start control lives in the center of the screen.
             Expanded(
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: LiveCameraConnection(
-                  isActive: _isRunning,
-                  config: const LiveCameraConfig(),
-                  placeholder: Text(
-                    _isRunning
-                        ? 'Initializing camera...'
-                        : 'Ready. Tap Start to begin.',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
+              child: Center(
+                child: FilledButton(
+                  onPressed: _isRunning ? null : _startWorkoutAndOpenCamera,
+                  style: FilledButton.styleFrom(
+                    shape: const CircleBorder(),
+                    fixedSize: const Size(120, 120),
                   ),
+                  child: const Text('START'),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            const Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    title: 'Reps',
-                    value: '0',
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    title: 'Phase',
-                    value: '—',
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    title: 'Tempo',
-                    value: '—',
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.title,
-    required this.value,
-  });
-
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
-        ],
       ),
     );
   }

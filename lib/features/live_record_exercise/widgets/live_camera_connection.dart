@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../services/camera_config.dart';
 import '../services/camera_service.dart';
+import 'camera_switcher.dart';
 import 'live_camera_preview.dart';
 
 /// A reusable camera “connection” widget.
@@ -26,17 +27,37 @@ class LiveCameraConnection extends StatefulWidget {
   const LiveCameraConnection({
     required this.isActive,
     required this.config,
+    this.borderRadius = const BorderRadius.all(Radius.circular(12)),
     this.placeholder,
     this.errorBuilder,
+    this.cameraControlsBuilder,
     super.key,
   });
 
   final bool isActive;
   final LiveCameraConfig config;
 
+  /// How the preview should be clipped.
+  ///
+  /// Use [BorderRadius.zero] for full-screen.
+  final BorderRadius borderRadius;
+
   final Widget? placeholder;
 
   final Widget Function(BuildContext context, Object error)? errorBuilder;
+
+  /// Optional builder for camera controls (e.g., camera switcher).
+  ///
+  /// This is intentionally owned by the parent so it can be placed anywhere
+  /// (and wrapped in [SafeArea] to avoid colliding with status bars/notches).
+  final Widget Function(
+    BuildContext context,
+    List<CameraDescription> cameras,
+    int selectedIndex,
+    bool isBusy,
+    VoidCallback onToggleNext,
+    ValueChanged<int> onSelectIndex,
+  )? cameraControlsBuilder;
 
   @override
   State<LiveCameraConnection> createState() => _LiveCameraConnectionState();
@@ -100,6 +121,10 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
     setState(() {
       _isSwitching = true;
       _error = null;
+      // Important: clear the current controller immediately.
+      // LiveCameraService will dispose the old controller during the switch,
+      // and we must not render CameraPreview with a disposed controller.
+      _controller = null;
     });
 
     try {
@@ -128,6 +153,8 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
     setState(() {
       _isSwitching = true;
       _error = null;
+      // Avoid a frame rendering with a controller that is about to be disposed.
+      _controller = null;
     });
 
     try {
@@ -196,8 +223,10 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
     final selectedIndex = cameras.indexWhere((c) => c.name == selected.name);
     final showSwitcher = cameras.length > 1;
 
+    final effectiveSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: widget.borderRadius,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -205,102 +234,44 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
             controller: controller,
           ),
           if (showSwitcher)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: _CameraSwitcher(
-                cameras: cameras,
-                selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
-                isBusy: _isSwitching,
-                onToggleNext: _switchToNextCamera,
-                onSelectIndex: _selectCameraByIndex,
+            Positioned.fill(
+              child: (widget.cameraControlsBuilder ??
+                  _defaultCameraControlsBuilder)(
+                context,
+                cameras,
+                effectiveSelectedIndex,
+                _isSwitching,
+                _switchToNextCamera,
+                _selectCameraByIndex,
               ),
             ),
         ],
       ),
     );
   }
-}
 
-class _CameraSwitcher extends StatelessWidget {
-  const _CameraSwitcher({
-    required this.cameras,
-    required this.selectedIndex,
-    required this.isBusy,
-    required this.onToggleNext,
-    required this.onSelectIndex,
-  });
-
-  final List<CameraDescription> cameras;
-  final int selectedIndex;
-  final bool isBusy;
-
-  final VoidCallback onToggleNext;
-  final ValueChanged<int> onSelectIndex;
-
-  String _labelFor(CameraDescription camera, int index) {
-    final direction = switch (camera.lensDirection) {
-      CameraLensDirection.front => 'Front',
-      CameraLensDirection.back => 'Back',
-      CameraLensDirection.external => 'External',
-    };
-    return '$direction ${index + 1}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    Widget child;
-    if (cameras.length <= 2) {
-      child = IconButton(
-        tooltip: 'Switch camera',
-        onPressed: isBusy ? null : onToggleNext,
-        icon: const Icon(Icons.cameraswitch),
-      );
-    } else {
-      final currentLabel = _labelFor(cameras[selectedIndex], selectedIndex);
-      child = PopupMenuButton<int>(
-        tooltip: 'Select camera',
-        enabled: !isBusy,
-        onSelected: onSelectIndex,
-        itemBuilder: (context) => [
-          for (var i = 0; i < cameras.length; i++)
-            PopupMenuItem<int>(
-              value: i,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (i == selectedIndex)
-                    const Icon(Icons.check, size: 18)
-                  else
-                    const SizedBox(width: 18, height: 18),
-                  const SizedBox(width: 8),
-                  Text(_labelFor(cameras[i], i)),
-                ],
-              ),
-            ),
-        ],
+  Widget _defaultCameraControlsBuilder(
+    BuildContext context,
+    List<CameraDescription> cameras,
+    int selectedIndex,
+    bool isBusy,
+    VoidCallback onToggleNext,
+    ValueChanged<int> onSelectIndex,
+  ) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topRight,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cameraswitch),
-              const SizedBox(width: 8),
-              Text(currentLabel),
-              const SizedBox(width: 4),
-              const Icon(Icons.arrow_drop_down),
-            ],
+          padding: const EdgeInsets.all(8),
+          child: CameraSwitcher(
+            cameras: cameras,
+            selectedIndex: selectedIndex,
+            isBusy: isBusy,
+            onToggleNext: onToggleNext,
+            onSelectIndex: onSelectIndex,
           ),
         ),
-      );
-    }
-
-    return Material(
-      color: colorScheme.surfaceContainerHighest,
-      shape: const StadiumBorder(),
-      child: child,
+      ),
     );
   }
 }

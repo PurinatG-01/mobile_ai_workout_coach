@@ -71,23 +71,54 @@ class LiveCameraPreview extends StatelessWidget {
     final previewSize = controller.value.previewSize;
 
     double effectiveAspectRatio;
-    if (previewSize != null && previewSize.width > 0 && previewSize.height > 0) {
+    if (previewSize != null &&
+        previewSize.width > 0 &&
+        previewSize.height > 0) {
       final previewAspect = previewSize.width / previewSize.height;
       effectiveAspectRatio = uiOrientation == Orientation.portrait
           ? (1 / previewAspect)
           : previewAspect;
     } else {
       final reported = controller.value.aspectRatio;
-      final needsInversion = (uiOrientation == Orientation.portrait && reported > 1) ||
-          (uiOrientation == Orientation.landscape && reported < 1);
+      final needsInversion =
+          (uiOrientation == Orientation.portrait && reported > 1) ||
+              (uiOrientation == Orientation.landscape && reported < 1);
       effectiveAspectRatio = needsInversion ? (1 / reported) : reported;
     }
 
-    return Center(
-      child: AspectRatio(
-        aspectRatio: effectiveAspectRatio,
-        child: CameraPreview(controller),
-      ),
+    // Fill the available space while preserving the camera aspect ratio.
+    // Any overflow is cropped, matching a typical "full-screen camera" UX.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final maxHeight = constraints.maxHeight;
+
+        // Fall back to a simple AspectRatio if we can't determine constraints.
+        if (maxWidth <= 0 || maxHeight <= 0) {
+          return Center(
+            child: AspectRatio(
+              aspectRatio: effectiveAspectRatio,
+              child: CameraPreview(controller),
+            ),
+          );
+        }
+
+        final containerAspectRatio = maxWidth / maxHeight;
+        final rawScale = effectiveAspectRatio / containerAspectRatio;
+        final scale = rawScale < 1 ? (1 / rawScale) : rawScale;
+
+        return ClipRect(
+          child: Transform.scale(
+            scale: scale,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: effectiveAspectRatio,
+                child: CameraPreview(controller),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
