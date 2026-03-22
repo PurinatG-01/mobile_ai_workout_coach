@@ -21,6 +21,7 @@ class LiveCameraPreview extends StatelessWidget {
     required this.controller,
     this.placeholder,
     this.errorBuilder,
+    this.overlay,
     super.key,
   });
 
@@ -34,6 +35,12 @@ class LiveCameraPreview extends StatelessWidget {
   /// If not provided, a basic error message is rendered.
   final Widget Function(BuildContext context, CameraException error)?
       errorBuilder;
+
+  /// Optional UI drawn above the camera preview.
+  ///
+  /// Rendered within the same transform/crop as the camera preview so it
+  /// stays aligned to the video feed.
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
@@ -107,13 +114,21 @@ class LiveCameraPreview extends StatelessWidget {
         final rawScale = effectiveAspectRatio / containerAspectRatio;
         final scale = rawScale < 1 ? (1 / rawScale) : rawScale;
 
+        final overlay = this.overlay;
+
         return ClipRect(
           child: Transform.scale(
             scale: scale,
             child: Center(
               child: AspectRatio(
                 aspectRatio: effectiveAspectRatio,
-                child: CameraPreview(controller),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CameraPreview(controller),
+                    if (overlay != null) Positioned.fill(child: overlay),
+                  ],
+                ),
               ),
             ),
           ),

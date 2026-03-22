@@ -1,10 +1,17 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/camera_config.dart';
 import '../services/camera_service.dart';
 import 'camera_switcher.dart';
 import 'live_camera_preview.dart';
+
+typedef LiveCameraFrameCallback = void Function(
+  CameraImage image,
+  CameraDescription camera,
+  DeviceOrientation deviceOrientation,
+);
 
 /// A reusable camera “connection” widget.
 ///
@@ -31,6 +38,8 @@ class LiveCameraConnection extends StatefulWidget {
     this.placeholder,
     this.errorBuilder,
     this.cameraControlsBuilder,
+    this.previewOverlayBuilder,
+    this.onCameraImage,
     super.key,
   });
 
@@ -59,6 +68,19 @@ class LiveCameraConnection extends StatefulWidget {
     ValueChanged<int> onSelectIndex,
   )? cameraControlsBuilder;
 
+  /// Optional overlay rendered above the camera preview.
+  ///
+  /// This overlay is rendered within the same transform/crop as the preview,
+  /// which allows drawing aligned landmarks, guides, etc.
+  final Widget? Function(BuildContext context, CameraController controller)?
+      previewOverlayBuilder;
+
+  /// Optional live image-stream callback.
+  ///
+  /// When provided, this widget will start the camera image stream and forward
+  /// frames. This is used for real-time ML (pose detection, etc.).
+  final LiveCameraFrameCallback? onCameraImage;
+
   @override
   State<LiveCameraConnection> createState() => _LiveCameraConnectionState();
 }
@@ -70,6 +92,7 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
   CameraController? _controller;
   List<CameraDescription> _cameras = const [];
   bool _isSwitching = false;
+  int _imageStreamSession = 0;
 
   @override
   void initState() {
@@ -90,6 +113,15 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
         _stop();
       }
     }
+
+    // If a frame listener was added/removed, restart the stream accordingly.
+    if (oldWidget.onCameraImage != widget.onCameraImage) {
+      if (widget.onCameraImage == null) {
+        _stopImageStream();
+      } else {
+        _startImageStreamIfNeeded();
+      }
+    }
   }
 
   Future<void> _start() async {
@@ -107,6 +139,8 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
         _controller = _service.controller;
         _cameras = _service.cameras;
       });
+
+      _startImageStreamIfNeeded();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -127,6 +161,8 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
       _controller = null;
     });
 
+    await _stopImageStream();
+
     try {
       await _service.switchCamera(widget.config);
       if (!mounted) return;
@@ -135,6 +171,8 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
         _cameras = _service.cameras;
         _isSwitching = false;
       });
+
+      _startImageStreamIfNeeded();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -157,6 +195,8 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
       _controller = null;
     });
 
+    await _stopImageStream();
+
     try {
       await _service.selectCamera(cameras[index], widget.config);
       if (!mounted) return;
@@ -165,6 +205,8 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
         _cameras = _service.cameras;
         _isSwitching = false;
       });
+
+      _startImageStreamIfNeeded();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -175,6 +217,7 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
   }
 
   Future<void> _stop() async {
+    await _stopImageStream();
     await _service.dispose();
     if (!mounted) return;
     setState(() {
@@ -185,8 +228,59 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
 
   @override
   void dispose() {
+    _stopImageStream();
     _service.dispose();
     super.dispose();
+  }
+
+  void _startImageStreamIfNeeded() {
+    final callback = widget.onCameraImage;
+    final controller = _controller;
+    if (callback == null || controller == null) return;
+    if (!controller.value.isInitialized) return;
+    if (controller.value.isStreamingImages) return;
+
+    // Run after the current frame to avoid starting a stream mid-build.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final currentController = _controller;
+      final currentCallback = widget.onCameraImage;
+      if (currentController == null || currentCallback == null) return;
+      if (currentController.value.isStreamingImages) return;
+
+      final session = ++_imageStreamSession;
+      try {
+        await currentController.startImageStream((image) {
+          if (!mounted) return;
+          if (session != _imageStreamSession) return;
+          if (currentController != _controller) return;
+
+          currentCallback(
+            image,
+            currentController.description,
+            currentController.value.deviceOrientation,
+          );
+        });
+      } catch (_) {
+        // If the stream can't be started (e.g., quickly switching cameras),
+        // just ignore; the next controller assignment will retry.
+      }
+    });
+  }
+
+  Future<void> _stopImageStream() async {
+    _imageStreamSession++;
+    final controller = _controller;
+    if (controller == null) return;
+
+    try {
+      if (controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+      }
+    } catch (_) {
+      // Ignore failures during disposal/switch.
+    }
   }
 
   @override
@@ -232,6 +326,7 @@ class _LiveCameraConnectionState extends State<LiveCameraConnection> {
         children: [
           LiveCameraPreview(
             controller: controller,
+            overlay: widget.previewOverlayBuilder?.call(context, controller),
           ),
           if (showSwitcher)
             Positioned.fill(

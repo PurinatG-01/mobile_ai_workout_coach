@@ -139,15 +139,38 @@ class LiveCameraService {
       await old.dispose();
     }
 
+    final ImageFormatGroup? effectiveFormatGroup =
+        config.imageFormatGroup ?? _defaultImageFormatGroup();
+
     final controller = CameraController(
       description,
       config.resolutionPreset,
       enableAudio: config.enableAudio,
-      imageFormatGroup: config.imageFormatGroup,
+      imageFormatGroup: effectiveFormatGroup,
     );
 
     _controller = controller;
     await controller.initialize();
+  }
+
+  ImageFormatGroup? _defaultImageFormatGroup() {
+    // ML Kit camera-frame conversion supports:
+    // - Android: NV21
+    // - iOS: BGRA8888
+    //
+    // Using these defaults makes it possible to run ML Kit directly on the live
+    // camera stream without additional per-platform configuration.
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return ImageFormatGroup.nv21;
+      case TargetPlatform.iOS:
+        return ImageFormatGroup.bgra8888;
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return null;
+    }
   }
 
   void _ensureSupportedPlatform() {
