@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../shared/models/exercise_type.dart';
+import '../../../common/models/exercise_type.dart';
 import '../../../app/router.dart';
 
 class WorkoutScreen extends StatefulWidget {
