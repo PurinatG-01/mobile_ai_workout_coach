@@ -15,5 +15,16 @@ abstract class ExerciseCalculator {
   ExerciseFrameResult? update({
     required Pose pose,
     required DateTime timestamp,
+
+    /// Manual control signals (e.g. from UI buttons).
+    ///
+    /// When [autoSetLifecycle] is false, callers should drive the set lifecycle
+    /// via these signals.
+    bool startSet = false,
+    bool endSet = false,
+
+    /// Whether the calculator should start/end sets automatically based on
+    /// pose-derived predicates.
+    bool autoSetLifecycle = true,
   });
 }

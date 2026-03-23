@@ -48,20 +48,54 @@ class SetLifecycleController {
     required bool isPreparePose,
     required bool isBreakPose,
     required DateTime timestamp,
+
+    /// Manual overrides (e.g. UI controls).
+    bool startSignal = false,
+    bool endSignal = false,
+
+    /// Whether automatic start/end transitions are enabled.
+    bool autoStart = true,
+    bool autoEnd = true,
   }) {
     var didStartSet = false;
     var didEndSet = false;
 
+    if (endSignal) {
+      if (_stage != ExerciseSetStage.rest) {
+        _stage = ExerciseSetStage.rest;
+        _countdownStartedAt = null;
+        _prepareLostAt = null;
+        didEndSet = true;
+      }
+      return (didStartSet: didStartSet, didEndSet: didEndSet);
+    }
+
+    if (startSignal) {
+      if (_stage != ExerciseSetStage.active) {
+        _stage = ExerciseSetStage.active;
+        _countdownStartedAt = null;
+        _prepareLostAt = null;
+        didStartSet = true;
+      }
+      return (didStartSet: didStartSet, didEndSet: didEndSet);
+    }
+
     switch (_stage) {
       case ExerciseSetStage.rest:
         _prepareLostAt = null;
-        if (isPreparePose) {
+        if (autoStart && isPreparePose) {
           _stage = ExerciseSetStage.countdown;
           _countdownStartedAt = timestamp;
         }
         break;
 
       case ExerciseSetStage.countdown:
+        if (!autoStart) {
+          // If auto-start is disabled, countdown is meaningless.
+          reset();
+          break;
+        }
+
         if (!isPreparePose) {
           // Abort countdown if user breaks prepare pose.
           reset();
@@ -79,6 +113,11 @@ class SetLifecycleController {
         break;
 
       case ExerciseSetStage.active:
+        if (!autoEnd) {
+          _prepareLostAt = null;
+          break;
+        }
+
         if (!isBreakPose) {
           _prepareLostAt = null;
           break;

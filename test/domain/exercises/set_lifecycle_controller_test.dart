@@ -97,4 +97,57 @@ void main() {
     );
     expect(controller.stage, ExerciseSetStage.rest);
   });
+
+  test('SetLifecycleController: manual start/stop with auto disabled', () {
+    final controller = SetLifecycleController(
+      countdownDuration: const Duration(seconds: 3),
+      endSetGraceDuration: const Duration(seconds: 1),
+    );
+
+    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+
+    // Auto disabled: prepare pose should not start countdown.
+    controller.tick(
+      isPreparePose: true,
+      isBreakPose: false,
+      timestamp: t0,
+      autoStart: false,
+      autoEnd: false,
+    );
+    expect(controller.stage, ExerciseSetStage.rest);
+
+    // Manual start forces active.
+    final evStart = controller.tick(
+      isPreparePose: false,
+      isBreakPose: true,
+      timestamp: t0.add(const Duration(milliseconds: 10)),
+      startSignal: true,
+      autoStart: false,
+      autoEnd: false,
+    );
+    expect(controller.stage, ExerciseSetStage.active);
+    expect(evStart.didStartSet, isTrue);
+
+    // Auto end disabled: break pose should not end the set.
+    controller.tick(
+      isPreparePose: false,
+      isBreakPose: true,
+      timestamp: t0.add(const Duration(seconds: 10)),
+      autoStart: false,
+      autoEnd: false,
+    );
+    expect(controller.stage, ExerciseSetStage.active);
+
+    // Manual end forces rest.
+    final evEnd = controller.tick(
+      isPreparePose: true,
+      isBreakPose: false,
+      timestamp: t0.add(const Duration(seconds: 11)),
+      endSignal: true,
+      autoStart: false,
+      autoEnd: false,
+    );
+    expect(controller.stage, ExerciseSetStage.rest);
+    expect(evEnd.didEndSet, isTrue);
+  });
 }

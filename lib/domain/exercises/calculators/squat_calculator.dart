@@ -43,6 +43,9 @@ class SquatCalculator implements ExerciseCalculator {
   ExerciseFrameResult? update({
     required Pose pose,
     required DateTime timestamp,
+    bool startSet = false,
+    bool endSet = false,
+    bool autoSetLifecycle = true,
   }) {
     final isPreparePose = _isPreparePose(pose);
     final isBreakPose = !isPreparePose;
@@ -50,6 +53,10 @@ class SquatCalculator implements ExerciseCalculator {
       isPreparePose: isPreparePose,
       isBreakPose: isBreakPose,
       timestamp: timestamp,
+      startSignal: startSet,
+      endSignal: endSet,
+      autoStart: autoSetLifecycle,
+      autoEnd: autoSetLifecycle,
     );
 
     if (lifecycleEvent.didEndSet) {
