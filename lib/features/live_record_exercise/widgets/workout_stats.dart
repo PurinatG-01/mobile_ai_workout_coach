@@ -4,13 +4,13 @@ class WorkoutStats extends StatelessWidget {
   const WorkoutStats({
     super.key,
     this.reps = '0',
-    this.phase = '—',
-    this.tempo = '—',
+    this.exerciseStage = '—',
+    this.setStage = '—',
   });
 
   final String reps;
-  final String phase;
-  final String tempo;
+  final String exerciseStage;
+  final String setStage;
 
   @override
   Widget build(BuildContext context) {
@@ -25,15 +25,15 @@ class WorkoutStats extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: _StatCard(
-            title: 'Phase',
-            value: phase,
+            title: 'Exercise stage',
+            value: exerciseStage,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _StatCard(
-            title: 'Tempo',
-            value: tempo,
+            title: 'Set stage',
+            value: setStage,
           ),
         ),
       ],

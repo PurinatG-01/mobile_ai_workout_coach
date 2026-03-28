@@ -50,6 +50,7 @@ class SetLifecycleController {
     required DateTime timestamp,
 
     /// Manual overrides (e.g. UI controls).
+    bool startCountdownSignal = false,
     bool startSignal = false,
     bool endSignal = false,
 
@@ -80,6 +81,16 @@ class SetLifecycleController {
       return (didStartSet: didStartSet, didEndSet: didEndSet);
     }
 
+    if (startCountdownSignal) {
+      if (_stage == ExerciseSetStage.rest) {
+        _stage = ExerciseSetStage.countdown;
+        _countdownStartedAt = timestamp;
+        _prepareLostAt = null;
+      }
+      // Continue into the state machine to allow an immediate transition to
+      // active if countdownDuration is 0.
+    }
+
     switch (_stage) {
       case ExerciseSetStage.rest:
         _prepareLostAt = null;
@@ -90,12 +101,6 @@ class SetLifecycleController {
         break;
 
       case ExerciseSetStage.countdown:
-        if (!autoStart) {
-          // If auto-start is disabled, countdown is meaningless.
-          reset();
-          break;
-        }
-
         if (!isPreparePose) {
           // Abort countdown if user breaks prepare pose.
           reset();

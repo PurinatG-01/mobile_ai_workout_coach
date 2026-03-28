@@ -15,9 +15,29 @@ Current MVP focus:
 - `flutter pub get`
 - `flutter run`
 
+Notes:
+
+- Live Camera defaults to the front camera when available (switchable in-app).
+
 ### Test
 
 - `flutter test`
+
+## Exercise Engine (Domain)
+
+The real-time “exercise logic” is implemented as domain-layer calculators that consume ML Kit pose frames.
+
+- Contract: `ExerciseCalculator` (`reset()` + `update(...)` per pose frame)
+- Output: `ExerciseFrameResult` (reps, set stage, rep phase, metrics)
+- Set lifecycle state machine: `SetLifecycleController` (rest → countdown → active → rest)
+- Factory: `ExerciseCalculatorFactory` (select calculator per `ExerciseType`)
+
+Design notes:
+
+- `SetLifecycleController` is intentionally **not** exposed on the `ExerciseCalculator` interface.
+  - Implementations own lifecycle internally.
+  - For testing/modularity, calculators accept an optional injected lifecycle controller via their constructor.
+  - Callers interact only with input signals to `update(...)` and the returned `ExerciseFrameResult`.
 
 ## Navigation
 

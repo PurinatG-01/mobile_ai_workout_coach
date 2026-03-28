@@ -104,9 +104,18 @@ class LiveCameraService {
   }
 
   CameraDescription _selectDefaultCamera(List<CameraDescription> cameras) {
+    final front =
+        cameras.where((c) => c.lensDirection == CameraLensDirection.front);
+    if (front.isNotEmpty) return front.first;
+
     final back =
         cameras.where((c) => c.lensDirection == CameraLensDirection.back);
     if (back.isNotEmpty) return back.first;
+
+    final external =
+        cameras.where((c) => c.lensDirection == CameraLensDirection.external);
+    if (external.isNotEmpty) return external.first;
+
     return cameras.first;
   }
 

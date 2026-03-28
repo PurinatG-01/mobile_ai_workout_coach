@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
+import '../../../common/models/exercise_type.dart';
+import '../../../domain/exercises/exercise_calculator.dart';
+import '../../../domain/exercises/exercise_calculator_factory.dart';
+import '../../../domain/exercises/models/exercise_frame_result.dart';
+import '../../../domain/exercises/models/exercise_rep_phase.dart';
+import '../../../domain/exercises/models/exercise_set_stage.dart';
 import '../services/camera_config.dart';
 import '../services/pose_detection_service.dart';
 import '../widgets/camera_switcher.dart';
@@ -13,10 +19,12 @@ import '../widgets/workout_stats.dart';
 class WorkoutLiveCameraScreen extends StatefulWidget {
   const WorkoutLiveCameraScreen({
     required this.config,
+    required this.exerciseType,
     super.key,
   });
 
   final LiveCameraConfig config;
+  final ExerciseType exerciseType;
 
   @override
   State<WorkoutLiveCameraScreen> createState() =>
@@ -25,11 +33,15 @@ class WorkoutLiveCameraScreen extends StatefulWidget {
 
 class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
   late final PoseDetectionService _poseService;
+  late final ExerciseCalculator _calculator;
+
+  bool _startCountdownPending = false;
 
   int _poseCount = 0;
   int _landmarkCount = 0;
   DateTime? _lastPoseAt;
   Pose? _latestPose;
+  ExerciseFrameResult? _latestResult;
 
   @override
   void initState() {
@@ -40,6 +52,8 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
         model: PoseDetectionModel.base,
       ),
     );
+
+    _calculator = const ExerciseCalculatorFactory().create(widget.exerciseType);
   }
 
   @override
@@ -50,6 +64,22 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final latestResult = _latestResult;
+    final countdownMs = latestResult?.countdownRemainingMs;
+    final countdownSeconds = countdownMs == null
+        ? null
+        : (countdownMs / 1000.0).ceil().clamp(0, 999);
+
+    final repsText = latestResult?.reps.toString() ?? '0';
+    final exerciseStageText =
+        latestResult == null ? '—' : _formatRepPhase(latestResult.repPhase);
+    final setStageText =
+        latestResult == null ? '—' : _formatSetStage(latestResult.setStage);
+
+    final setStage = latestResult?.setStage;
+    final canStartCountdown = !_startCountdownPending &&
+        (setStage == null || setStage == ExerciseSetStage.rest);
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -115,30 +145,23 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
                 ),
               );
             },
-            onCameraImage: (image, camera, deviceOrientation) async {
-              final poses = await _poseService.processCameraImage(
-                image: image,
-                camera: camera,
-                deviceOrientation: deviceOrientation,
-              );
-              if (!mounted || poses == null) return;
-
-              final poseCount = poses.length;
-              final landmarkCount =
-                  poses.isNotEmpty ? poses.first.landmarks.length : 0;
-
-              // Update only when we actually processed a frame.
-              setState(() {
-                _poseCount = poseCount;
-                _landmarkCount = landmarkCount;
-                _lastPoseAt = DateTime.now();
-                _latestPose = poses.isNotEmpty ? poses.first : null;
-              });
-            },
+            onCameraImage: onCameraImage,
             placeholder: const Center(
               child: CircularProgressIndicator(),
             ),
           ),
+
+          if (latestResult?.setStage == ExerciseSetStage.countdown &&
+              countdownSeconds != null &&
+              countdownSeconds > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: _CountdownOverlay(seconds: countdownSeconds),
+                ),
+              ),
+            ),
+
           // Overlay controls live within SafeArea only.
           SafeArea(
             child: Stack(
@@ -162,8 +185,24 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const WorkoutStats(),
+                        WorkoutStats(
+                          reps: repsText,
+                          exerciseStage: exerciseStageText,
+                          setStage: setStageText,
+                        ),
                         const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: canStartCountdown
+                              ? () {
+                                  setState(() {
+                                    _startCountdownPending = true;
+                                  });
+                                }
+                              : null,
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Start countdown'),
+                        ),
+                        const SizedBox(height: 12),
                         FilledButton.icon(
                           onPressed: () {
                             Navigator.of(context).maybePop();
@@ -179,6 +218,101 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void onCameraImage(image, camera, deviceOrientation) async {
+    final poses = await _poseService.processCameraImage(
+      image: image,
+      camera: camera,
+      deviceOrientation: deviceOrientation,
+    );
+    if (!mounted || poses == null) return;
+
+    final poseCount = poses.length;
+    final landmarkCount = poses.isNotEmpty ? poses.first.landmarks.length : 0;
+
+    final pose = poses.isNotEmpty ? poses.first : null;
+    final startCountdown = _startCountdownPending;
+    final result = pose == null
+        ? null
+        : _calculator.update(
+            pose: pose,
+            timestamp: DateTime.now(),
+            startCountdown: startCountdown,
+            autoSetLifecycle: false,
+            autoEndSetLifecycle: true,
+          );
+
+    // Update only when we actually processed a frame.
+    setState(() {
+      _poseCount = poseCount;
+      _landmarkCount = landmarkCount;
+      _lastPoseAt = DateTime.now();
+      _latestPose = pose;
+      _latestResult = result;
+
+      // Consume the pending signal on the next processed pose frame.
+      if (startCountdown) {
+        _startCountdownPending = false;
+      }
+    });
+  }
+
+  String _formatSetStage(ExerciseSetStage stage) {
+    switch (stage) {
+      case ExerciseSetStage.rest:
+        return 'Rest';
+      case ExerciseSetStage.countdown:
+        return 'Countdown';
+      case ExerciseSetStage.active:
+        return 'Active';
+    }
+  }
+
+  String _formatRepPhase(ExerciseRepPhase phase) {
+    switch (phase) {
+      case ExerciseRepPhase.unknown:
+        return 'Unknown';
+      case ExerciseRepPhase.top:
+        return 'Top';
+      case ExerciseRepPhase.bottom:
+        return 'Bottom';
+      case ExerciseRepPhase.concentric:
+        return 'Concentric';
+      case ExerciseRepPhase.eccentric:
+        return 'Eccentric';
+    }
+  }
+}
+
+class _CountdownOverlay extends StatelessWidget {
+  const _CountdownOverlay({
+    required this.seconds,
+  });
+
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          '$seconds',
+          style: theme.textTheme.displayLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 
+import '../common/models/exercise_type.dart';
 import '../features/live_record_exercise/screens/workout_screen.dart';
 import '../features/live_record_exercise/screens/workout_live_camera_screen.dart';
 import '../features/live_record_exercise/services/camera_config.dart';
@@ -22,9 +23,15 @@ final GoRouter appRouter = GoRouter(
     // Full-screen route that sits above the AppShell scaffold.
     GoRoute(
       path: AppRoutes.liveCamera,
-      builder: (context, state) => const WorkoutLiveCameraScreen(
-        config: LiveCameraConfig(),
-      ),
+      builder: (context, state) {
+        final exercise = (state.extra is ExerciseType)
+            ? state.extra! as ExerciseType
+            : ExerciseType.squat;
+        return WorkoutLiveCameraScreen(
+          config: const LiveCameraConfig(),
+          exerciseType: exercise,
+        );
+      },
     ),
     ShellRoute(
       builder: (context, state, child) => AppShell(

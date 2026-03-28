@@ -21,7 +21,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     // Push onto the root navigator so the live camera experience is truly
     // full-screen (no AppShell app bar/bottom nav).
-    await context.push(AppRoutes.liveCamera);
+    await context.push(AppRoutes.liveCamera, extra: _exercise);
 
     // If the user backs out without stopping,
     // keep the state consistent and stop recording.

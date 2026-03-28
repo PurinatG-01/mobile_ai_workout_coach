@@ -20,11 +20,18 @@ abstract class ExerciseCalculator {
     ///
     /// When [autoSetLifecycle] is false, callers should drive the set lifecycle
     /// via these signals.
+    bool startCountdown = false,
     bool startSet = false,
     bool endSet = false,
 
     /// Whether the calculator should start/end sets automatically based on
     /// pose-derived predicates.
     bool autoSetLifecycle = true,
+
+    /// Whether the calculator should end sets automatically based on
+    /// pose-derived predicates.
+    ///
+    /// Useful when you want manual start but automatic end.
+    bool autoEndSetLifecycle = true,
   });
 }

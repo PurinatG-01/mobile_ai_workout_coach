@@ -6,13 +6,13 @@
 - [ ] 4 — CAM: Camera permission handling
 - [x] 5 — CAM: Implement camera service (building block)
 - [x] 6 — UI: Render camera preview widget (building block)
-- [ ] 7 — CAM: Add frame processing throttle
-- [ ] 8 — POSE: Wrap ML Kit pose
-- [ ] 9 — POSE: Convert frames to input
+- [x] 7 — CAM: Add frame processing throttle/lock
+- [x] 8 — POSE: Wrap ML Kit pose detection
+- [x] 9 — POSE: Convert camera frames to ML Kit InputImage
 - [ ] 10 — ENGINE: Landmark model and mapper
 - [x] 11 — ENGINE: Angle calculator utility
 - [ ] 12 — ENGINE: Add smoothing for angles
-- [ ] 13 — ENGINE: Exercise state machine base
+- [x] 13 — ENGINE: Exercise state machine base (set lifecycle)
 - [ ] 14 — ENGINE: Squat phase thresholds
 - [ ] 15 — ENGINE: Squat rep counter logic
 - [x] 16 — UI: Overlay reps/phase/tempo UI (placeholder overlay)

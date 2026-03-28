@@ -49,6 +49,20 @@ Building blocks (current code):
 - Full-screen live camera screen: `lib/features/live_record_exercise/screens/workout_live_camera_screen.dart`
 - Overlay stats widget (placeholder values today): `lib/features/live_record_exercise/widgets/workout_stats.dart`
 
+Exercise engine (domain layer):
+
+- Calculator contract: `lib/domain/exercises/exercise_calculator.dart`
+- Calculator factory: `lib/domain/exercises/exercise_calculator_factory.dart`
+- Set lifecycle controller (rest/countdown/active): `lib/domain/exercises/set_lifecycle_controller.dart`
+- Calculators (per exercise): `lib/domain/exercises/calculators/`
+- Frame output model: `lib/domain/exercises/models/exercise_frame_result.dart`
+
+Notes:
+
+- The live camera screen instantiates a calculator via the factory and feeds it pose frames.
+- Manual vs auto lifecycle is controlled by `update(...)` flags/signals (e.g. `startCountdown`, `autoSetLifecycle`).
+- The camera service defaults to the front camera when available.
+
 Out of scope (for now):
 
 - Backend video upload/streaming

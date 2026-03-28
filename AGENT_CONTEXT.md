@@ -34,7 +34,7 @@ Flutter (Dart)
 
 ### Pose Detection
 
-Planned: Google ML Kit Pose Detection (package TBD)
+Google ML Kit Pose Detection via `google_mlkit_pose_detection`.
 
 ### Processing Strategy
 
@@ -56,6 +56,7 @@ Camera Stream
 → Angle Calculation
 → Movement Phase Detection
 → Rep Counter
+→ Set Lifecycle (rest/countdown/active)
 → Feedback Engine
 → UI
 
@@ -67,10 +68,15 @@ No video streaming to backend.
 
 Native camera access is planned via the Flutter `camera` plugin.
 
+Default behavior:
+
+- The live camera experience prefers the front camera when available (users can switch cameras in-app).
+
 Implementation building blocks live under:
 
 - `lib/features/live_record_exercise/services/camera_service.dart`
 - `lib/features/live_record_exercise/services/camera_config.dart`
+- `lib/features/live_record_exercise/services/pose_detection_service.dart` (ML Kit wrapper + throttle/lock)
 - `lib/features/live_record_exercise/widgets/live_camera_connection.dart` (owns camera lifecycle + exposes external camera-controls builder)
 - `lib/features/live_record_exercise/widgets/live_camera_preview.dart`
 - `lib/features/live_record_exercise/widgets/camera_switcher.dart` (camera selection control)
@@ -101,7 +107,7 @@ features/
   - screens/ (screens)
   - widgets/ (shared UI widgets)
   - services/ (camera + pose wrappers)
-  - (later) domain/ (state machine, counters)
+  - (later) state/ (feature state management)
 
 - workout_log/
   Local workout history and simple stats.
@@ -114,6 +120,14 @@ shared/
 
 - engine/ (math helpers like angle calculation)
 - models/ (shared models like exercise types)
+
+domain/
+
+- exercises/
+  Exercise “engine” implementations.
+  - Calculator contract + per-exercise calculators
+  - Set lifecycle controller for set state transitions
+  - Frame output model for UI consumption
 
 ---
 
@@ -131,6 +145,28 @@ The live camera experience is a dedicated full-screen route rendered above the s
 ---
 
 # Key Concepts
+
+## Exercise Calculators (Domain)
+
+Exercise logic is implemented as stateful calculators that process a stream of ML Kit `Pose` frames.
+
+- `ExerciseCalculator.update(...)` consumes a single frame (pose + timestamp) and returns an `ExerciseFrameResult`.
+- The output is intentionally UI-friendly: reps, set stage, rep phase, metrics, and optional countdown remaining.
+
+### Set Lifecycle
+
+Set start/end is modeled as a small state machine:
+
+rest → countdown → active → rest
+
+This behavior is encapsulated in `SetLifecycleController`.
+
+Coupling rule:
+
+- `SetLifecycleController` is intentionally not exposed via the `ExerciseCalculator` interface.
+  - Calculators own lifecycle internally.
+  - For testing/modularity, calculators may accept an optional injected lifecycle controller in their constructor.
+  - Callers control behavior via `update(...)` signals/flags (`startCountdown`, `startSet`, `endSet`, `autoSetLifecycle`, `autoEndSetLifecycle`).
 
 ## Landmarks
 
@@ -238,7 +274,7 @@ Agents must follow these rules:
 1. Keep logic modular.
 2. Do not mix UI and algorithm code.
 3. Avoid heavy computation inside UI widgets.
-4. All calculations should live inside the engine layer.
+4. All calculations should live inside domain/common/shared helpers (not inside widgets).
 5. Prefer pure functions for math logic.
 6. Avoid introducing backend dependencies.
 

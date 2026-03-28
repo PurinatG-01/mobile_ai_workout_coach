@@ -151,9 +151,11 @@ class BicepCurlCalculator implements ExerciseCalculator {
   ExerciseFrameResult? update({
     required Pose pose,
     required DateTime timestamp,
+    bool startCountdown = false,
     bool startSet = false,
     bool endSet = false,
     bool autoSetLifecycle = true,
+    bool autoEndSetLifecycle = true,
   }) {
     final isPreparePose = _isPreparePose(pose);
     final metrics = ExerciseFrameMetrics();
@@ -181,10 +183,11 @@ class BicepCurlCalculator implements ExerciseCalculator {
       isPreparePose: isPreparePose,
       isBreakPose: isBreakPose,
       timestamp: timestamp,
+      startCountdownSignal: startCountdown,
       startSignal: startSet,
       endSignal: endSet,
       autoStart: autoSetLifecycle,
-      autoEnd: autoSetLifecycle,
+      autoEnd: autoEndSetLifecycle,
     );
 
     if (lifecycleEvent.didStartSet) {
