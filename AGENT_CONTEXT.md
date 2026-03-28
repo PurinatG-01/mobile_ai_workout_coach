@@ -152,6 +152,7 @@ Exercise logic is implemented as stateful calculators that process a stream of M
 
 - `ExerciseCalculator.update(...)` consumes a single frame (pose + timestamp) and returns an `ExerciseFrameResult`.
 - The output is intentionally UI-friendly: reps, set stage, rep phase, metrics, and optional countdown remaining.
+- `ExerciseFrameResult` also exposes one-frame lifecycle event flags (`didStartSet`, `didEndSet`, `didEndSetByBreakPose`) so UI can react to set transitions without reaching into calculator internals.
 
 ### Set Lifecycle
 
@@ -258,6 +259,17 @@ if (isProcessing) return;
 # First Supported Exercises
 
 1. Squats
+
+## Break Pose (End-of-set)
+
+The set lifecycle can auto-end a set when a calculator reports `isBreakPose`.
+
+Current bicep curl strategy:
+
+- Ends the set when the user “bends down” compared to the set’s starting posture.
+- Uses a baseline waist/hip angle (shoulder-hip-knee) captured at set start, then triggers break when the waist angle decreases by a threshold (relative delta).
+- This is designed to work for both standing curls (baseline near 180°) and sitting curls (baseline near ~90°).
+
 2. Push-ups
 3. Pull-ups
 

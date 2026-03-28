@@ -30,6 +30,7 @@ void main() {
         controller.tick(isPreparePose: true, isBreakPose: false, timestamp: t2);
     expect(controller.stage, ExerciseSetStage.active);
     expect(ev.didStartSet, isTrue);
+    expect(ev.didEndSetByBreakPose, isFalse);
   });
 
   test('SetLifecycleController: active ends only after grace period', () {
@@ -58,6 +59,7 @@ void main() {
     );
     expect(controller.stage, ExerciseSetStage.active);
     expect(ev1.didEndSet, isFalse);
+    expect(ev1.didEndSetByBreakPose, isFalse);
 
     // Before grace elapses, even in break pose => still active.
     final tBeforeGrace = tLost.add(const Duration(milliseconds: 900));
@@ -77,6 +79,7 @@ void main() {
     );
     expect(controller.stage, ExerciseSetStage.rest);
     expect(ev2.didEndSet, isTrue);
+    expect(ev2.didEndSetByBreakPose, isTrue);
   });
 
   test('SetLifecycleController: breaking prepare pose aborts countdown', () {
@@ -149,5 +152,6 @@ void main() {
     );
     expect(controller.stage, ExerciseSetStage.rest);
     expect(evEnd.didEndSet, isTrue);
+    expect(evEnd.didEndSetByBreakPose, isFalse);
   });
 }

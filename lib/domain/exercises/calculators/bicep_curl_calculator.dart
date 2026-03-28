@@ -1,7 +1,5 @@
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
-import 'dart:math' as math;
-
 import '../../../common/services/pose_angle_service.dart';
 import '../exercise_calculator.dart';
 import '../models/exercise_frame_metrics.dart';
@@ -26,24 +24,26 @@ class BicepCurlCalculator implements ExerciseCalculator {
   bool _repArmed = false;
   double? _lastAvgElbowDeg;
 
-  DateTime? _relaxedBreakCandidateSince;
   DateTime? _missingPrepareSince;
+  double? _baselineWaistAngleDeg;
 
   static const double _extendedThresholdDeg = 160;
   static const double _curledThresholdDeg = 60;
   static const double _phaseDeltaEpsilonDeg = 1;
 
-  // End-set "break" signal (intentional): raise both hands above shoulders.
-  // This must be distinct from any rep position so slow reps don't end the set.
-  static const double _breakHandsUpMinLiftUpperArmRatio = 0.6;
-  static const double _breakMinElbowExtendedDeg = 120;
+  // End-set "break" signal (intentional): bend down relative to start pose.
+  //
+  // We model this as a significant decrease in the waist/hip angle
+  // (shoulder-hip-knee) compared to the set's starting posture.
+  //
+  // This works for both standing curls (baseline near 180°) and sitting curls
+  // (baseline near ~90°), because the threshold is relative to baseline.
+  static const double _breakWaistAngleDeltaDeg = 30;
 
-  // Natural break: arms relaxed down (e.g. after dropping the weight).
-  // We require this posture to be held for a bit to avoid ending sets during
-  // slow reps or brief pauses.
-  static const Duration _breakRelaxedHoldDuration =
+  // Pose-missing break: if the pose disappears entirely (user steps away / big
+  // camera shift), end the set only after a hold to avoid transient blips.
+  static const Duration _breakMissingPoseHoldDuration =
       Duration(milliseconds: 1500);
-  static const double _breakRelaxedMinElbowExtendedDeg = 160;
 
   static const _requiredLandmarks = <PoseLandmarkType>{
     PoseLandmarkType.leftShoulder,
@@ -60,8 +60,8 @@ class BicepCurlCalculator implements ExerciseCalculator {
     _repPhase = ExerciseRepPhase.unknown;
     _repArmed = false;
     _lastAvgElbowDeg = null;
-    _relaxedBreakCandidateSince = null;
     _missingPrepareSince = null;
+    _baselineWaistAngleDeg = null;
     _lifecycle.reset();
   }
 
@@ -72,10 +72,24 @@ class BicepCurlCalculator implements ExerciseCalculator {
     return true;
   }
 
-  double _dist(PoseLandmark a, PoseLandmark b) {
-    final dx = a.x - b.x;
-    final dy = a.y - b.y;
-    return math.sqrt(dx * dx + dy * dy);
+  double? _waistAngleDegFromPose(Pose pose) {
+    final left = _poseAngles.angleDegreesFromPose(
+      pose: pose,
+      a: PoseLandmarkType.leftShoulder,
+      b: PoseLandmarkType.leftHip,
+      c: PoseLandmarkType.leftKnee,
+    );
+    final right = _poseAngles.angleDegreesFromPose(
+      pose: pose,
+      a: PoseLandmarkType.rightShoulder,
+      b: PoseLandmarkType.rightHip,
+      c: PoseLandmarkType.rightKnee,
+    );
+
+    if (left == null && right == null) return null;
+    if (left == null) return right;
+    if (right == null) return left;
+    return (left + right) / 2;
   }
 
   bool _isBreakPose({
@@ -83,68 +97,27 @@ class BicepCurlCalculator implements ExerciseCalculator {
     required double? leftElbowDeg,
     required double? rightElbowDeg,
     required DateTime timestamp,
+    required double? waistAngleDeg,
   }) {
     // If the pose disappears entirely (user steps away / big camera shift),
     // end the set only after a longer hold to avoid transient detection blips.
     if (!_isPreparePose(pose)) {
       _missingPrepareSince ??= timestamp;
-      _relaxedBreakCandidateSince = null;
 
       final since = _missingPrepareSince!;
-      return timestamp.difference(since) >= _breakRelaxedHoldDuration;
+      return timestamp.difference(since) >= _breakMissingPoseHoldDuration;
     }
     _missingPrepareSince = null;
 
     if (leftElbowDeg == null || rightElbowDeg == null) {
-      _relaxedBreakCandidateSince = null;
       return false;
     }
 
-    final ls = pose.landmarks[PoseLandmarkType.leftShoulder]!;
-    final le = pose.landmarks[PoseLandmarkType.leftElbow]!;
-    final lw = pose.landmarks[PoseLandmarkType.leftWrist]!;
-    final rs = pose.landmarks[PoseLandmarkType.rightShoulder]!;
-    final re = pose.landmarks[PoseLandmarkType.rightElbow]!;
-    final rw = pose.landmarks[PoseLandmarkType.rightWrist]!;
+    final baseline = _baselineWaistAngleDeg;
+    if (baseline == null || waistAngleDeg == null) return false;
 
-    // 1) Explicit break gesture: both hands above shoulders.
-    if (leftElbowDeg >= _breakMinElbowExtendedDeg &&
-        rightElbowDeg >= _breakMinElbowExtendedDeg) {
-      // ML Kit coordinates are image-space; y increases downward.
-      // "Hands up" => wrist is above shoulder => (shoulder.y - wrist.y) positive.
-      final leftUpperArmLen = _dist(ls, le);
-      final rightUpperArmLen = _dist(rs, re);
-      if (leftUpperArmLen > 0 && rightUpperArmLen > 0) {
-        final leftLift = ls.y - lw.y;
-        final rightLift = rs.y - rw.y;
-        final leftHandsUp =
-            leftLift >= _breakHandsUpMinLiftUpperArmRatio * leftUpperArmLen;
-        final rightHandsUp =
-            rightLift >= _breakHandsUpMinLiftUpperArmRatio * rightUpperArmLen;
-        if (leftHandsUp && rightHandsUp) {
-          _relaxedBreakCandidateSince = null;
-          return true;
-        }
-      }
-    }
-
-    // 2) Natural break: relaxed arms down, held for a while.
-    final elbowsExtendedEnough =
-        leftElbowDeg >= _breakRelaxedMinElbowExtendedDeg &&
-            rightElbowDeg >= _breakRelaxedMinElbowExtendedDeg;
-    final wristsBelowElbows = lw.y > le.y && rw.y > re.y;
-    final elbowsBelowShoulders = le.y > ls.y && re.y > rs.y;
-    final relaxedArmsDown =
-        elbowsExtendedEnough && wristsBelowElbows && elbowsBelowShoulders;
-
-    if (!relaxedArmsDown) {
-      _relaxedBreakCandidateSince = null;
-      return false;
-    }
-
-    _relaxedBreakCandidateSince ??= timestamp;
-    final since = _relaxedBreakCandidateSince!;
-    return timestamp.difference(since) >= _breakRelaxedHoldDuration;
+    // Smaller hip angle => more flexion / more bent down.
+    return waistAngleDeg <= baseline - _breakWaistAngleDeltaDeg;
   }
 
   @override
@@ -159,6 +132,7 @@ class BicepCurlCalculator implements ExerciseCalculator {
   }) {
     final isPreparePose = _isPreparePose(pose);
     final metrics = ExerciseFrameMetrics();
+    final waistAngleDeg = _waistAngleDegFromPose(pose);
     final leftElbowDeg = _poseAngles.angleDegreesFromPose(
       pose: pose,
       a: PoseLandmarkType.leftShoulder,
@@ -177,6 +151,7 @@ class BicepCurlCalculator implements ExerciseCalculator {
       leftElbowDeg: leftElbowDeg,
       rightElbowDeg: rightElbowDeg,
       timestamp: timestamp,
+      waistAngleDeg: waistAngleDeg,
     );
 
     final lifecycleEvent = _lifecycle.tick(
@@ -195,16 +170,23 @@ class BicepCurlCalculator implements ExerciseCalculator {
       _repPhase = ExerciseRepPhase.unknown;
       _repArmed = false;
       _lastAvgElbowDeg = null;
-      _relaxedBreakCandidateSince = null;
       _missingPrepareSince = null;
+      _baselineWaistAngleDeg = waistAngleDeg;
     }
 
     if (lifecycleEvent.didEndSet) {
       _repPhase = ExerciseRepPhase.unknown;
       _repArmed = false;
       _lastAvgElbowDeg = null;
-      _relaxedBreakCandidateSince = null;
       _missingPrepareSince = null;
+      _baselineWaistAngleDeg = null;
+    }
+
+    // Capture baseline lazily if the set started without lower-body landmarks.
+    if (_lifecycle.stage == ExerciseSetStage.active &&
+        _baselineWaistAngleDeg == null &&
+        waistAngleDeg != null) {
+      _baselineWaistAngleDeg = waistAngleDeg;
     }
     if (leftElbowDeg != null) {
       metrics[ExerciseMetric.leftElbowDeg] = leftElbowDeg;
@@ -257,6 +239,9 @@ class BicepCurlCalculator implements ExerciseCalculator {
           : ExerciseRepPhase.unknown,
       metrics: metrics,
       timestamp: timestamp,
+      didStartSet: lifecycleEvent.didStartSet,
+      didEndSet: lifecycleEvent.didEndSet,
+      didEndSetByBreakPose: lifecycleEvent.didEndSetByBreakPose,
       countdownRemainingMs: _lifecycle.stage == ExerciseSetStage.countdown
           ? _lifecycle.countdownRemainingMsAt(timestamp)
           : null,

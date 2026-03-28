@@ -62,6 +62,7 @@ Notes:
 - The live camera screen instantiates a calculator via the factory and feeds it pose frames.
 - Manual vs auto lifecycle is controlled by `update(...)` flags/signals (e.g. `startCountdown`, `autoSetLifecycle`).
 - The camera service defaults to the front camera when available.
+- The live camera UI reacts to lifecycle event flags from `ExerciseFrameResult` (e.g. shows a brief message when a set ends by break pose).
 
 Out of scope (for now):
 

@@ -78,6 +78,9 @@ class PushUpCalculator implements ExerciseCalculator {
           : ExerciseRepPhase.unknown,
       metrics: ExerciseFrameMetrics(),
       timestamp: timestamp,
+      didStartSet: lifecycleEvent.didStartSet,
+      didEndSet: lifecycleEvent.didEndSet,
+      didEndSetByBreakPose: lifecycleEvent.didEndSetByBreakPose,
       countdownRemainingMs: _lifecycle.stage == ExerciseSetStage.countdown
           ? _lifecycle.countdownRemainingMsAt(timestamp)
           : null,

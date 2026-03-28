@@ -32,6 +32,16 @@ The real-time “exercise logic” is implemented as domain-layer calculators th
 - Set lifecycle state machine: `SetLifecycleController` (rest → countdown → active → rest)
 - Factory: `ExerciseCalculatorFactory` (select calculator per `ExerciseType`)
 
+UI integration notes:
+
+- `ExerciseFrameResult` also includes one-frame lifecycle event flags: `didStartSet`, `didEndSet`, and `didEndSetByBreakPose`.
+  - The live camera UI uses `didEndSetByBreakPose` to display a small “break detected → set ended” message.
+
+Bicep curl end-of-set (break pose):
+
+- The bicep curl calculator ends sets when it detects a user “bend down” posture relative to the set’s starting pose.
+- Detection uses a waist/hip angle delta (shoulder-hip-knee) from baseline so it works for both standing and sitting curls.
+
 Design notes:
 
 - `SetLifecycleController` is intentionally **not** exposed on the `ExerciseCalculator` interface.

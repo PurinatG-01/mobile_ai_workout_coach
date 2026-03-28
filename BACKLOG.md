@@ -25,4 +25,4 @@
 
 Notes:
 
-- Item 16 is currently a UI overlay scaffold (`WorkoutStats`) and is not yet wired to pose/engine outputs.
+- Item 16 uses `ExerciseFrameResult` values (reps/stage/phase) on the live camera screen.

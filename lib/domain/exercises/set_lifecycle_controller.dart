@@ -43,8 +43,9 @@ class SetLifecycleController {
   /// - [isPreparePose] is a (possibly exercise-specific) predicate.
   /// - [isBreakPose] indicates the user has left the exercise/prepare context
   ///   and is in a "break" posture; set end is gated on this.
-  /// - Returns a tuple describing whether the set was started/ended on this tick.
-  ({bool didStartSet, bool didEndSet}) tick({
+  /// - Returns a tuple describing whether the set was started/ended on this
+  ///   tick, and whether an end was triggered by break pose.
+  ({bool didStartSet, bool didEndSet, bool didEndSetByBreakPose}) tick({
     required bool isPreparePose,
     required bool isBreakPose,
     required DateTime timestamp,
@@ -60,6 +61,7 @@ class SetLifecycleController {
   }) {
     var didStartSet = false;
     var didEndSet = false;
+    var didEndSetByBreakPose = false;
 
     if (endSignal) {
       if (_stage != ExerciseSetStage.rest) {
@@ -68,7 +70,11 @@ class SetLifecycleController {
         _prepareLostAt = null;
         didEndSet = true;
       }
-      return (didStartSet: didStartSet, didEndSet: didEndSet);
+      return (
+        didStartSet: didStartSet,
+        didEndSet: didEndSet,
+        didEndSetByBreakPose: didEndSetByBreakPose,
+      );
     }
 
     if (startSignal) {
@@ -78,7 +84,11 @@ class SetLifecycleController {
         _prepareLostAt = null;
         didStartSet = true;
       }
-      return (didStartSet: didStartSet, didEndSet: didEndSet);
+      return (
+        didStartSet: didStartSet,
+        didEndSet: didEndSet,
+        didEndSetByBreakPose: didEndSetByBreakPose,
+      );
     }
 
     if (startCountdownSignal) {
@@ -135,10 +145,15 @@ class SetLifecycleController {
           _countdownStartedAt = null;
           _prepareLostAt = null;
           didEndSet = true;
+          didEndSetByBreakPose = true;
         }
         break;
     }
 
-    return (didStartSet: didStartSet, didEndSet: didEndSet);
+    return (
+      didStartSet: didStartSet,
+      didEndSet: didEndSet,
+      didEndSetByBreakPose: didEndSetByBreakPose,
+    );
   }
 }
