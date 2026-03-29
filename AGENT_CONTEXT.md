@@ -259,19 +259,18 @@ if (isProcessing) return;
 # First Supported Exercises
 
 1. Squats
+2. Bicep curls
+3. Push-ups
+4. Pull-ups
 
 ## Break Pose (End-of-set)
 
 The set lifecycle can auto-end a set when a calculator reports `isBreakPose`.
 
-Current bicep curl strategy:
+Break pose is calculator-specific. Current strategies:
 
-- Ends the set when the user “bends down” compared to the set’s starting posture.
-- Uses a baseline waist/hip angle (shoulder-hip-knee) captured at set start, then triggers break when the waist angle decreases by a threshold (relative delta).
-- This is designed to work for both standing curls (baseline near 180°) and sitting curls (baseline near ~90°).
-
-2. Push-ups
-3. Pull-ups
+- Squat: `isBreakPose = true` only when **no usable leg chain** (hip+knee+ankle) is detected. This prevents ending a set when the user is simply at squat bottom.
+- Bicep curl: ends the set when the user “bends down” compared to the set’s starting posture using a baseline waist/hip angle delta (shoulder-hip-knee). Designed to work for both standing and sitting curls.
 
 These exercises validate the system.
 
@@ -309,14 +308,15 @@ Pose detection is already handled by ML Kit.
 
 Milestone 1:
 
-Implement real-time squat counter.
+Real-time squat counter (implemented).
 
-Requirements:
+Current squat engine behavior:
 
-- detect knee angle
-- detect bottom position
-- detect standing position
-- count repetitions
+- Side-camera oriented; picks “best visible leg” and locks it during the active set to avoid left/right switching jitter.
+- Prepare pose: standing/top knee angle (>= 165°) gates countdown/start.
+- Break pose: no leg detected.
+- Phase detection: absolute knee thresholds with hysteresis + deadbanded trend in mid-zone.
+- Rep counting: count when top is reached after bottom.
 
 Accuracy target:
 

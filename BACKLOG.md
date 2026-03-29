@@ -13,8 +13,8 @@
 - [x] 11 — ENGINE: Angle calculator utility
 - [ ] 12 — ENGINE: Add smoothing for angles
 - [x] 13 — ENGINE: Exercise state machine base (set lifecycle)
-- [ ] 14 — ENGINE: Squat phase thresholds
-- [ ] 15 — ENGINE: Squat rep counter logic
+- [x] 14 — ENGINE: Squat phase thresholds
+- [x] 15 — ENGINE: Squat rep counter logic
 - [x] 16 — UI: Overlay reps/phase/tempo UI (placeholder overlay)
 - [ ] 17 — UI: Debug landmarks/skeleton overlay
 - [ ] 18 — ENGINE: Push-up rep counter logic

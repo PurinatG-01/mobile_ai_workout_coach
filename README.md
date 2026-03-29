@@ -42,6 +42,17 @@ Bicep curl end-of-set (break pose):
 - The bicep curl calculator ends sets when it detects a user “bend down” posture relative to the set’s starting pose.
 - Detection uses a waist/hip angle delta (shoulder-hip-knee) from baseline so it works for both standing and sitting curls.
 
+Squat rep counting notes:
+
+- Side-camera oriented: the engine selects the “best visible leg” (larger detected segment length) and **locks it during the active set** to avoid left/right switching jitter.
+- Prepare pose (for auto start/countdown): standing/top knee angle (>= 165°).
+- Break pose (auto-end): **no usable leg chain detected** (hip+knee+ankle missing) so squat bottom is never treated as break.
+- Phases use absolute knee thresholds with hysteresis:
+  - Top: >= 165° (exit top when < 160°)
+  - Bottom: <= 120° (exit bottom when > 125°)
+  - Mid: eccentric/concentric from a deadbanded knee-angle trend
+- A rep is counted when the user reaches top after having reached bottom.
+
 Design notes:
 
 - `SetLifecycleController` is intentionally **not** exposed on the `ExerciseCalculator` interface.
