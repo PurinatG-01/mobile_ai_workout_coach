@@ -109,7 +109,7 @@ class PoseDetectionService {
     if (rotation == null) return null;
 
     // Validate format depending on platform.
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    final format = InputImageFormatValue.fromRawValue(image.format.raw as int);
     if (format == null) return null;
     if (Platform.isAndroid && format != InputImageFormat.nv21) return null;
     if (Platform.isIOS && format != InputImageFormat.bgra8888) return null;

@@ -1,4 +1,10 @@
-# TODO
+# BACKLOG
+
+## In Progress
+<!-- Max 2-3 items. Move here when actively working, move back or mark done when done. -->
+
+
+## TODO
 
 - [x] 1 — IOS: Enable iOS simulator destinations (SUPPORTED_PLATFORMS)
 - [x] 2 — CORE: Create lib feature folders

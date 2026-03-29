@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
@@ -222,7 +223,7 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
     );
   }
 
-  void onCameraImage(image, camera, deviceOrientation) async {
+  void onCameraImage(CameraImage image, CameraDescription camera, DeviceOrientation deviceOrientation) async {
     final poses = await _poseService.processCameraImage(
       image: image,
       camera: camera,
