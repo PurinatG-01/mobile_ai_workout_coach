@@ -23,7 +23,7 @@
 - [x] 15 — ENGINE: Squat rep counter logic
 - [x] 16 — UI: Overlay reps/phase/tempo UI (placeholder overlay)
 - [ ] 17 — UI: Debug landmarks/skeleton overlay
-- [ ] 18 — ENGINE: Push-up rep counter logic
+- [x] 18 — ENGINE: Push-up rep counter logic
 - [ ] 19 — ENGINE: Tempo tracking per rep
 - [ ] 20 — COACH: Feedback engine minimal cues
 - [ ] 21 — UI: Performance stats display
