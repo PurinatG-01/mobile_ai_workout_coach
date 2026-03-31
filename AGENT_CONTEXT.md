@@ -102,6 +102,11 @@ app/
 
 features/
 
+- onboarding/
+  Camera permission gate shown before any app content.
+  - screens/ (CameraPermissionScreen — notDetermined and permanentlyDenied states)
+  - services/ (PermissionService abstract interface + PermissionHandlerService)
+
 - live_record_exercise/
   The real-time camera + pose + rep counting experience.
   - screens/ (screens)
@@ -133,14 +138,15 @@ domain/
 
 # Navigation (Current)
 
-The app uses a 2-tab shell aligned to the 2 epics:
+The app uses GoRouter with an async camera permission redirect gate.
 
+On every navigation, the redirect checks `PermissionService.cameraStatus()`. If not granted, the user is sent to `/onboarding/permissions` first.
+
+Routes:
+- Onboarding (permission gate): `/onboarding/permissions`
 - Live Record Exercise: `/live`
 - Workout Log: `/log`
-
-The live camera experience is a dedicated full-screen route rendered above the shell scaffold:
-
-- Live Camera: `/live/camera`
+- Live camera (full-screen, above shell): `/live/camera`
 
 ---
 

@@ -14,14 +14,34 @@
 
 ## Navigation
 
-The current app navigation is epic-based and uses two shell routes:
+The current app navigation uses a GoRouter with an async permission gate:
 
+- Onboarding (permission gate): `/onboarding/permissions`
 - Live Record Exercise: `/live`
 - Workout Log: `/log`
 
 The live camera experience is a separate full-screen route rendered above the shell:
 
 - Live Camera: `/live/camera`
+
+On every navigation the router redirect checks camera permission. If not granted, the user is sent to `/onboarding/permissions` first.
+
+---
+
+## 0) Onboarding
+
+Goal: Gate the app behind a camera permission onboarding screen before the user reaches any app content.
+
+Key features:
+- State A (not determined / denied): hero banner, feature list, "Allow Camera Access" + "Skip for now"
+- State B (permanently denied): red banner, strikethrough feature list, "Open Settings" + "Continue without camera"
+- GoRouter async redirect checks permission on every navigation and routes to onboarding when not granted
+- Re-checks permission on app resume (user returning from iOS Settings)
+
+Code locations:
+- Permission service: `lib/features/onboarding/services/permission_service.dart`
+- Screen: `lib/features/onboarding/screens/camera_permission_screen.dart`
+- Route + redirect: `lib/app/router.dart` (`AppRoutes.cameraPermission`)
 
 ---
 
