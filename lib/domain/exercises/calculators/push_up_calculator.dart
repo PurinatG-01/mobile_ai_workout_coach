@@ -340,12 +340,21 @@ class PushUpCalculator implements ExerciseCalculator {
     final prevZone = _elbowZone;
 
     // Zone transitions with hysteresis.
+    // When crossing from top/bottom through mid in a single frame (e.g. a fast
+    // jump from 170° directly to 75°), allow skipping straight to bottom/top
+    // rather than stopping at mid for one frame.
     switch (_elbowZone) {
       case _ElbowZone.top:
-        if (elbowDeg < _elbowTopExitDeg) _elbowZone = _ElbowZone.mid;
+        if (elbowDeg < _elbowTopExitDeg) {
+          _elbowZone = _ElbowZone.mid;
+          if (elbowDeg <= _elbowBottomDeg) _elbowZone = _ElbowZone.bottom;
+        }
         break;
       case _ElbowZone.bottom:
-        if (elbowDeg > _elbowBottomExitDeg) _elbowZone = _ElbowZone.mid;
+        if (elbowDeg > _elbowBottomExitDeg) {
+          _elbowZone = _ElbowZone.mid;
+          if (elbowDeg >= _elbowTopDeg) _elbowZone = _ElbowZone.top;
+        }
         break;
       case _ElbowZone.mid:
         if (elbowDeg >= _elbowTopDeg) {
