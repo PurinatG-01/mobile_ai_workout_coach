@@ -6,6 +6,7 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile_ai_workout_coach/app/app.dart';
@@ -13,6 +14,19 @@ import 'package:mobile_ai_workout_coach/app/app.dart';
 void main() {
   testWidgets('Can navigate between Workout and Log',
       (WidgetTester tester) async {
+    // The router's async redirect calls Permission.camera.status via a platform
+    // channel. Mock it to return 1 (granted) so the redirect passes through.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('flutter.baseflow.com/permissions/methods'),
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'checkPermissionStatus') {
+          return 1; // PermissionStatus.granted
+        }
+        return null;
+      },
+    );
+
     await tester.pumpWidget(const App());
     await tester.pumpAndSettle();
 
