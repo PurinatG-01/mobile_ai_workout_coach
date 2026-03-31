@@ -9,7 +9,7 @@
 - [x] 1 — IOS: Enable iOS simulator destinations (SUPPORTED_PLATFORMS)
 - [x] 2 — CORE: Create lib feature folders
 - [x] 3 — UI: Workout screen app shell
-- [ ] 4 — CAM: Camera permission handling
+- [x] 4 — CAM: Camera permission handling
 - [x] 5 — CAM: Implement camera service (building block)
 - [x] 6 — UI: Render camera preview widget (building block)
 - [x] 7 — CAM: Add frame processing throttle/lock
