@@ -39,5 +39,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # ML Kit pods don't ship arm64 simulator slices.
+      # Exclude arm64 from simulator builds so x86_64 simulators work on Apple Silicon Macs.
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
   end
 end
