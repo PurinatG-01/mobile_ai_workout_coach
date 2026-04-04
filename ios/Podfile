@@ -43,6 +43,14 @@ post_install do |installer|
       # ML Kit pods don't ship arm64 simulator slices.
       # Exclude arm64 from simulator builds so x86_64 simulators work on Apple Silicon Macs.
       config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+
+      # permission_handler v10+ compiles out unused permissions by default.
+      # PERMISSION_CAMERA=1 re-enables the camera permission code so that
+      # Permission.camera.request() actually shows the native iOS dialog.
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_CAMERA=1',
+      ]
     end
   end
 end

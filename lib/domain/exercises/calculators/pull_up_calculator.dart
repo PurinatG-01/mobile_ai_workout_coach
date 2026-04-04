@@ -7,6 +7,12 @@ import '../models/exercise_rep_phase.dart';
 import '../models/exercise_set_stage.dart';
 import '../set_lifecycle_controller.dart';
 
+/// Pull-up rep/phase calculator.
+///
+/// The set lifecycle is driven entirely by button signals — no automatic
+/// start, end, or interruption based on pose.
+///
+// TODO(dev): implement rep counting using shoulder/elbow vertical movement.
 class PullUpCalculator implements ExerciseCalculator {
   PullUpCalculator({
     SetLifecycleController? lifecycle,
@@ -16,27 +22,11 @@ class PullUpCalculator implements ExerciseCalculator {
   ExerciseRepPhase _repPhase = ExerciseRepPhase.unknown;
   final SetLifecycleController _lifecycle;
 
-  static const _requiredLandmarks = <PoseLandmarkType>{
-    PoseLandmarkType.leftShoulder,
-    PoseLandmarkType.rightShoulder,
-    PoseLandmarkType.leftElbow,
-    PoseLandmarkType.rightElbow,
-    PoseLandmarkType.leftWrist,
-    PoseLandmarkType.rightWrist,
-  };
-
   @override
   void reset() {
     _reps = 0;
     _repPhase = ExerciseRepPhase.unknown;
     _lifecycle.reset();
-  }
-
-  bool _isPreparePose(Pose pose) {
-    for (final t in _requiredLandmarks) {
-      if (!pose.landmarks.containsKey(t)) return false;
-    }
-    return true;
   }
 
   @override
@@ -49,11 +39,10 @@ class PullUpCalculator implements ExerciseCalculator {
     bool autoSetLifecycle = true,
     bool autoEndSetLifecycle = true,
   }) {
-    final isPreparePose = _isPreparePose(pose);
-    final isBreakPose = !isPreparePose;
+    // Lifecycle is driven purely by button signals — pose never interrupts.
     final lifecycleEvent = _lifecycle.tick(
-      isPreparePose: isPreparePose,
-      isBreakPose: isBreakPose,
+      isPreparePose: true,
+      isBreakPose: false,
       timestamp: timestamp,
       startCountdownSignal: startCountdown,
       startSignal: startSet,
@@ -66,7 +55,6 @@ class PullUpCalculator implements ExerciseCalculator {
       _repPhase = ExerciseRepPhase.unknown;
     }
 
-    // TODO: implement pull-up rep counting using shoulder/elbow + vertical movement.
     return ExerciseFrameResult(
       reps: _reps,
       setStage: _lifecycle.stage,

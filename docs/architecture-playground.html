@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mobile AI Workout Coach — Architecture Diagrams</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:13px;background:#07090f;color:#dde1ec;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;
+}
+.hdr{
+  flex-shrink:0;background:#0d1117;border-bottom:1px solid #1c2333;
+  padding:9px 16px;display:flex;align-items:center;gap:16px;
+}
+.hdr-title{font-size:13px;font-weight:600;color:#8b949e;}
+.hdr-hint{font-size:11px;color:#30363d;margin-left:auto;}
+.ws{flex:1;display:flex;overflow:hidden;}
+.sb{
+  width:215px;flex-shrink:0;background:#0a0e19;
+  border-right:1px solid #1c2333;overflow-y:auto;
+  padding:10px;display:flex;flex-direction:column;gap:13px;
+}
+.sb-h{
+  font-size:10px;font-weight:700;color:#30363d;
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;
+}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:3px;}
+.pbtn{
+  background:#0f1622;border:1px solid #1c2333;color:#4a5568;
+  padding:5px 4px;border-radius:4px;cursor:pointer;font-size:11px;
+  text-align:center;line-height:1.35;transition:all .12s;
+}
+.pbtn:hover{background:#141b29;border-color:#2d3748;color:#8b949e;}
+.pbtn.on{background:#0c2440;border-color:#1a56a0;color:#58a6ff;}
+.tr{
+  display:flex;align-items:center;gap:6px;cursor:pointer;
+  padding:3px 4px;border-radius:3px;transition:background .1s;
+}
+.tr:hover{background:#0f1622;}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.tlbl{font-size:11px;color:#8b949e;}
+input[type=checkbox]{accent-color:#58a6ff;cursor:pointer;width:12px;height:12px;flex-shrink:0;}
+.ann-card{
+  background:#0f1622;border:1px solid #1c2333;border-radius:4px;
+  padding:7px 8px;position:relative;margin-bottom:4px;
+}
+.ann-name{font-size:10px;color:#58a6ff;font-weight:600;padding-right:18px;}
+.ann-txt{font-size:11px;color:#4a5568;margin-top:2px;line-height:1.4;}
+.delbtn{
+  position:absolute;top:4px;right:7px;background:none;border:none;
+  color:#2d3748;cursor:pointer;font-size:16px;line-height:1;
+}
+.delbtn:hover{color:#f85149;}
+.no-ann{font-size:11px;color:#2d3748;font-style:italic;}
+.cv{flex:1;position:relative;overflow:hidden;}
+.zbar{position:absolute;top:10px;right:10px;z-index:10;display:flex;gap:3px;}
+.zb{
+  background:#0d1117;border:1px solid #1c2333;color:#4a5568;
+  width:26px;height:26px;border-radius:4px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  transition:all .1s;
+}
+.zb:hover{background:#0f1622;color:#8b949e;}
+#svgc{width:100%;height:100%;display:block;cursor:grab;}
+#svgc:active{cursor:grabbing;}
+.pbar{
+  flex-shrink:0;background:#0a0e19;border-top:1px solid #1c2333;
+  padding:9px 14px;display:flex;gap:10px;align-items:flex-start;
+}
+#prompt-out{
+  flex:1;background:#07090f;border:1px solid #1c2333;color:#4a5568;
+  border-radius:4px;padding:7px 9px;
+  font-size:11px;font-family:'SF Mono','Fira Mono',Consolas,monospace;
+  resize:none;height:70px;line-height:1.5;outline:none;
+}
+.cp-btn{
+  background:#0c2440;border:1px solid #1a56a0;color:#58a6ff;
+  padding:7px 13px;border-radius:4px;cursor:pointer;
+  font-size:12px;white-space:nowrap;flex-shrink:0;transition:background .1s;
+}
+.cp-btn:hover{background:#0f2d52;}
+.mob{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);
+  z-index:200;align-items:center;justify-content:center;
+}
+.mob.open{display:flex;}
+.mod{
+  background:#0d1117;border:1px solid #1c2333;border-radius:8px;
+  padding:18px;width:340px;
+}
+.mod h3{font-size:13px;color:#dde1ec;margin-bottom:2px;}
+.mod-f{
+  font-size:10px;color:#2d3748;
+  font-family:'SF Mono',Consolas,monospace;margin-bottom:10px;
+}
+.mod-ta{
+  width:100%;background:#07090f;border:1px solid #1c2333;color:#dde1ec;
+  border-radius:4px;padding:7px;font-size:12px;
+  font-family:system-ui,sans-serif;resize:vertical;min-height:70px;outline:none;
+}
+.mod-ta:focus{border-color:#1a56a0;}
+.mod-acts{display:flex;gap:7px;justify-content:flex-end;margin-top:8px;}
+.btn-c{background:#0f1622;border:1px solid #1c2333;color:#4a5568;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;}
+.btn-s{background:#0c2440;border:1px solid #1a56a0;color:#58a6ff;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="hdr-title">Mobile AI Workout Coach — Architecture Diagrams</span>
+  <span class="hdr-hint">Drag to pan &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Click node to annotate</span>
+</header>
+
+<div class="ws">
+  <aside class="sb">
+    <div>
+      <div class="sb-h">Diagram View</div>
+      <div class="pg">
+        <button class="pbtn on" id="p-full" onclick="setP('full')">Full System</button>
+        <button class="pbtn"    id="p-pipe" onclick="setP('pipeline')">Data Flow</button>
+        <button class="pbtn"    id="p-eng"  onclick="setP('engine')">Exercise Engine</button>
+        <button class="pbtn"    id="p-nav"  onclick="setP('nav')">Navigation</button>
+      </div>
+    </div>
+    <div>
+      <div class="sb-h">Layers</div>
+      <div id="ll"></div>
+    </div>
+    <div>
+      <div class="sb-h">Connection Types</div>
+      <div id="cl"></div>
+    </div>
+    <div>
+      <div class="sb-h">Annotations (<span id="ann-cnt">0</span>)</div>
+      <div id="al"><div class="no-ann">Click any node to annotate.</div></div>
+    </div>
+  </aside>
+
+  <div class="cv">
+    <div class="zbar">
+      <button class="zb" onclick="doZ(1.25)" title="Zoom in">+</button>
+      <button class="zb" onclick="doZ(0.8)"  title="Zoom out">−</button>
+      <button class="zb" onclick="fitV()"    title="Fit to view">⤢</button>
+      <button class="zb" onclick="rstT()"    title="Reset">↺</button>
+    </div>
+    <svg id="svgc" xmlns="http://www.w3.org/2000/svg">
+      <defs id="defs">
+        <pattern id="bgp" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+          <circle cx="14" cy="14" r="0.6" fill="#1c2333"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#bgp)" pointer-events="none"/>
+      <g id="root">
+        <g id="gb"></g>
+        <g id="gc"></g>
+        <g id="gn"></g>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<div class="pbar">
+  <textarea id="prompt-out" readonly></textarea>
+  <button class="cp-btn" onclick="doCopy()">Copy Prompt</button>
+</div>
+
+<div class="mob" id="mob">
+  <div class="mod">
+    <h3 id="mn"></h3>
+    <div class="mod-f" id="mf"></div>
+    <textarea class="mod-ta" id="mt" placeholder="Add a note, question, or feedback… (Ctrl+Enter to save)"></textarea>
+    <div class="mod-acts">
+      <button class="btn-c" onclick="cMod()">Cancel</button>
+      <button class="btn-s" onclick="svAnn()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════
+
+const LAYERS = {
+  bootstrap:   { l: 'Bootstrap',   c: '#a78bfa' },
+  screens:     { l: 'Screens',     c: '#60a5fa' },
+  widgets:     { l: 'Widgets',     c: '#38bdf8' },
+  services:    { l: 'Services',    c: '#fbbf24' },
+  domain:      { l: 'Domain',      c: '#34d399' },
+  calculators: { l: 'Calculators', c: '#6ee7b7' },
+  models:      { l: 'Models',      c: '#f472b6' },
+  common:      { l: 'Common',      c: '#94a3b8' },
+};
+
+const CT = {
+  flow: { l: 'Data Flow',     c: '#3b82f6', d: ''    },
+  dep:  { l: 'Dependency',    c: '#374151', d: '4,3' },
+  call: { l: 'Function Call', c: '#10b981', d: '6,3' },
+};
+
+const N = [
+  // ── Bootstrap (y=25) ──────────────────────────────────────────
+  { id:'main',   lbl:'main.dart',            f:'lib/main.dart',                                                       x:80,  y:25,  w:115, h:34, la:'bootstrap'   },
+  { id:'app',    lbl:'app.dart',             f:'lib/app/app.dart',                                                    x:235, y:25,  w:115, h:34, la:'bootstrap'   },
+  { id:'router', lbl:'router.dart',          f:'lib/app/router.dart',                                                 x:390, y:25,  w:120, h:34, la:'bootstrap'   },
+  { id:'shell',  lbl:'AppShell',             f:'lib/app/shell/app_shell.dart',                                        x:555, y:25,  w:115, h:34, la:'bootstrap'   },
+  // ── Screens (y=145) ───────────────────────────────────────────
+  { id:'perm_s', lbl:'CameraPermission\nScreen', f:'features/onboarding/screens/camera_permission_screen.dart',      x:55,  y:145, w:160, h:46, la:'screens'     },
+  { id:'wk_s',   lbl:'WorkoutScreen',        f:'features/live_record_exercise/screens/workout_screen.dart',          x:265, y:145, w:140, h:34, la:'screens'     },
+  { id:'lv_s',   lbl:'LiveCamera\nScreen',   f:'features/live_record_exercise/screens/workout_live_camera_screen.dart', x:460, y:145, w:140, h:46, la:'screens'  },
+  { id:'log_s',  lbl:'WorkoutLogScreen',     f:'features/workout_log/screens/workout_log_screen.dart',               x:900, y:145, w:155, h:34, la:'screens'     },
+  // ── Widgets (y=275) ───────────────────────────────────────────
+  { id:'camconn',lbl:'LiveCamera\nConnection',  f:'features/live_record_exercise/widgets/live_camera_connection.dart',  x:265, y:275, w:140, h:46, la:'widgets'  },
+  { id:'camprev',lbl:'LiveCameraPreview',    f:'features/live_record_exercise/widgets/live_camera_preview.dart',      x:460, y:275, w:150, h:34, la:'widgets'     },
+  { id:'camsw',  lbl:'CameraSwitcher',       f:'features/live_record_exercise/widgets/camera_switcher.dart',         x:665, y:275, w:140, h:34, la:'widgets'     },
+  { id:'wstats', lbl:'WorkoutStats',         f:'features/live_record_exercise/widgets/workout_stats.dart',           x:900, y:275, w:130, h:34, la:'widgets'     },
+  { id:'povl',   lbl:'PoseLandmarks\nOverlay', f:'features/live_record_exercise/widgets/pose_landmarks_overlay.dart',x:1090,y:275, w:155, h:46, la:'widgets'     },
+  // ── Services (y=410) ──────────────────────────────────────────
+  { id:'pm_sv',  lbl:'PermissionService',    f:'features/onboarding/services/permission_service.dart',               x:55,  y:410, w:155, h:34, la:'services'    },
+  { id:'cm_sv',  lbl:'CameraService',        f:'features/live_record_exercise/services/camera_service.dart',         x:370, y:410, w:140, h:34, la:'services'    },
+  { id:'cm_cf',  lbl:'CameraConfig',         f:'features/live_record_exercise/services/camera_config.dart',         x:565, y:410, w:128, h:34, la:'services'    },
+  { id:'pd_sv',  lbl:'PoseDetection\nService',f:'features/live_record_exercise/services/pose_detection_service.dart',x:760, y:410, w:150, h:46, la:'services'   },
+  // ── Domain (y=550) ────────────────────────────────────────────
+  { id:'xc',     lbl:'ExerciseCalculator',   f:'lib/domain/exercises/exercise_calculator.dart',                      x:350, y:550, w:160, h:34, la:'domain'      },
+  { id:'xf',     lbl:'ExerciseCalc\nFactory',f:'lib/domain/exercises/exercise_calculator_factory.dart',              x:575, y:550, w:145, h:46, la:'domain'      },
+  { id:'lc',     lbl:'SetLifecycle\nController', f:'lib/domain/exercises/set_lifecycle_controller.dart',             x:790, y:550, w:150, h:46, la:'domain'      },
+  // ── Calculators (y=695) ───────────────────────────────────────
+  { id:'sq',     lbl:'SquatCalculator',      f:'lib/domain/exercises/calculators/squat_calculator.dart',             x:85,  y:695, w:145, h:34, la:'calculators' },
+  { id:'pu',     lbl:'PushUpCalculator',     f:'lib/domain/exercises/calculators/push_up_calculator.dart',           x:290, y:695, w:150, h:34, la:'calculators' },
+  { id:'bc',     lbl:'BicepCurlCalc',        f:'lib/domain/exercises/calculators/bicep_curl_calculator.dart',        x:505, y:695, w:140, h:34, la:'calculators' },
+  { id:'pp',     lbl:'PullUpCalculator',     f:'lib/domain/exercises/calculators/pull_up_calculator.dart',           x:710, y:695, w:150, h:34, la:'calculators' },
+  // ── Models (y=825) ────────────────────────────────────────────
+  { id:'fr',     lbl:'ExerciseFrameResult',  f:'lib/domain/exercises/models/exercise_frame_result.dart',             x:85,  y:825, w:160, h:34, la:'models'      },
+  { id:'fm',     lbl:'ExerciseFrameMetrics', f:'lib/domain/exercises/models/exercise_frame_metrics.dart',            x:310, y:825, w:165, h:34, la:'models'      },
+  { id:'rp',     lbl:'ExerciseRepPhase',     f:'lib/domain/exercises/models/exercise_rep_phase.dart',                x:545, y:825, w:150, h:34, la:'models'      },
+  { id:'ss',     lbl:'ExerciseSetStage',     f:'lib/domain/exercises/models/exercise_set_stage.dart',                x:755, y:825, w:150, h:34, la:'models'      },
+  { id:'et',     lbl:'ExerciseType',         f:'lib/common/models/exercise_type.dart',                               x:965, y:825, w:125, h:34, la:'models'      },
+  // ── Common (right column) ─────────────────────────────────────
+  { id:'anglec', lbl:'AngleCalculator',      f:'lib/common/utils/angle_calculator.dart',                             x:1100,y:410, w:145, h:34, la:'common'      },
+  { id:'posea',  lbl:'PoseAngleService',     f:'lib/common/services/pose_angle_service.dart',                        x:1100,y:550, w:150, h:34, la:'common'      },
+  { id:'sessm',  lbl:'WorkoutSession\nModel',f:'lib/common/models/workout_session_model.dart',                       x:1100,y:695, w:150, h:46, la:'common'      },
+];
+
+const C = [
+  // Bootstrap chain
+  { f:'main',   t:'app',    tp:'dep'  },
+  { f:'app',    t:'router', tp:'dep'  },
+  { f:'router', t:'shell',  tp:'dep'  },
+  // Router → screens
+  { f:'router', t:'perm_s', tp:'flow', lb:'/onboarding' },
+  { f:'router', t:'wk_s',   tp:'flow', lb:'/live'        },
+  { f:'router', t:'log_s',  tp:'flow', lb:'/log'         },
+  { f:'shell',  t:'wk_s',   tp:'dep'  },
+  { f:'shell',  t:'log_s',  tp:'dep'  },
+  // Screen navigation
+  { f:'wk_s',   t:'lv_s',   tp:'flow', lb:'navigate'     },
+  // Onboarding
+  { f:'perm_s', t:'pm_sv',  tp:'call' },
+  // Live screen → widgets
+  { f:'lv_s',   t:'camconn',tp:'dep'  },
+  { f:'lv_s',   t:'wstats', tp:'dep'  },
+  { f:'lv_s',   t:'povl',   tp:'dep'  },
+  { f:'camconn',t:'camprev',tp:'dep'  },
+  { f:'camconn',t:'camsw',  tp:'dep'  },
+  // Camera pipeline
+  { f:'camconn',t:'cm_sv',  tp:'call' },
+  { f:'cm_sv',  t:'cm_cf',  tp:'dep'  },
+  { f:'cm_sv',  t:'pd_sv',  tp:'flow', lb:'frames'       },
+  // Pose → domain
+  { f:'pd_sv',  t:'xc',     tp:'flow', lb:'Pose'         },
+  { f:'lv_s',   t:'xf',     tp:'call' },
+  { f:'xf',     t:'xc',     tp:'dep',  lb:'creates'      },
+  // Factory → calculators
+  { f:'xf',     t:'sq',     tp:'call' },
+  { f:'xf',     t:'pu',     tp:'call' },
+  { f:'xf',     t:'bc',     tp:'call' },
+  { f:'xf',     t:'pp',     tp:'call' },
+  // Calculators implement interface
+  { f:'sq',     t:'xc',     tp:'dep',  lb:'impl'         },
+  { f:'pu',     t:'xc',     tp:'dep',  lb:'impl'         },
+  { f:'bc',     t:'xc',     tp:'dep',  lb:'impl'         },
+  { f:'pp',     t:'xc',     tp:'dep',  lb:'impl'         },
+  // Lifecycle
+  { f:'xc',     t:'lc',     tp:'dep'  },
+  // Frame results emitted & consumed
+  { f:'xc',     t:'fr',     tp:'flow', lb:'emits'        },
+  { f:'fr',     t:'fm',     tp:'dep'  },
+  { f:'fr',     t:'rp',     tp:'dep'  },
+  { f:'fr',     t:'ss',     tp:'dep'  },
+  { f:'wstats', t:'fr',     tp:'flow', lb:'reads'        },
+  { f:'povl',   t:'fr',     tp:'flow', lb:'reads'        },
+  // Common utils
+  { f:'pd_sv',  t:'posea',  tp:'call' },
+  { f:'posea',  t:'anglec', tp:'call' },
+  { f:'sq',     t:'posea',  tp:'call' },
+  { f:'pu',     t:'posea',  tp:'call' },
+  { f:'bc',     t:'posea',  tp:'call' },
+  { f:'pp',     t:'posea',  tp:'call' },
+  // Type enum
+  { f:'xf',     t:'et',     tp:'dep'  },
+  // Log
+  { f:'log_s',  t:'sessm',  tp:'dep'  },
+];
+
+const PS = {
+  full: {
+    l: 'Full System', ns: null,
+    d: 'the complete system architecture'
+  },
+  pipeline: {
+    l: 'Data Flow',
+    ns: new Set(['cm_sv','cm_cf','pd_sv','anglec','posea',
+                 'xc','xf','lc','sq','pu','bc','pp',
+                 'fr','fm','rp','ss','lv_s','camconn','wstats','povl']),
+    d: 'the camera-to-UI data pipeline'
+  },
+  engine: {
+    l: 'Exercise Engine',
+    ns: new Set(['xc','xf','lc','sq','pu','bc','pp',
+                 'fr','fm','rp','ss','et','anglec','posea']),
+    d: 'the exercise engine domain layer'
+  },
+  nav: {
+    l: 'Navigation',
+    ns: new Set(['main','app','router','shell','perm_s','wk_s','lv_s','log_s','pm_sv']),
+    d: 'the app navigation and routing'
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+
+const S = {
+  p:    'full',
+  ly:   Object.fromEntries(Object.keys(LAYERS).map(k => [k, true])),
+  ct:   Object.fromEntries(Object.keys(CT).map(k => [k, true])),
+  anns: [],
+  t:    { x: 20, y: 20, s: 0.73 },
+  an:   null,
+};
+
+const NM = Object.fromEntries(N.map(n => [n.id, n]));
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+
+function init() {
+  buildDefs();
+  buildLayerList();
+  buildCtList();
+  redraw();
+  setupPan();
+  setTimeout(fitV, 160);
+}
+
+function buildDefs() {
+  const d = document.getElementById('defs');
+  d.innerHTML += Object.entries(CT).map(([id, c]) => `
+    <marker id="a-${id}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="${c.c}"/>
+    </marker>
+  `).join('') + `
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  `;
+}
+
+function buildLayerList() {
+  document.getElementById('ll').innerHTML = Object.entries(LAYERS).map(([id, l]) => `
+    <label class="tr">
+      <input type="checkbox" checked onchange="togL('${id}',this.checked)">
+      <span class="dot" style="background:${l.c}"></span>
+      <span class="tlbl">${l.l}</span>
+    </label>
+  `).join('');
+}
+
+function buildCtList() {
+  document.getElementById('cl').innerHTML = Object.entries(CT).map(([id, c]) => `
+    <label class="tr">
+      <input type="checkbox" checked onchange="togC('${id}',this.checked)">
+      <span class="dot" style="background:${c.c};border-radius:1px"></span>
+      <span class="tlbl">${c.l}</span>
+    </label>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// VISIBLE FILTERING
+// ═══════════════════════════════════════════════════════
+
+function visNodes() {
+  const pr = PS[S.p];
+  return N.filter(n => S.ly[n.la] && (!pr.ns || pr.ns.has(n.id)));
+}
+
+function visConns(vs) {
+  return C.filter(c => S.ct[c.tp] && vs.has(c.f) && vs.has(c.t));
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+
+function redraw() {
+  const vn = visNodes();
+  const vs = new Set(vn.map(n => n.id));
+  const vc = visConns(vs);
+  drawBands(vn);
+  drawConns(vc);
+  drawNodes(vn);
+  apT();
+}
+
+function drawBands(nodes) {
+  const bx = {};
+  nodes.forEach(n => {
+    if (!bx[n.la]) bx[n.la] = { x0: 9999, y0: 9999, x1: -1, y1: -1 };
+    const b = bx[n.la];
+    b.x0 = Math.min(b.x0, n.x - 12);
+    b.y0 = Math.min(b.y0, n.y - 10);
+    b.x1 = Math.max(b.x1, n.x + n.w + 12);
+    b.y1 = Math.max(b.y1, n.y + n.h + 10);
+  });
+  document.getElementById('gb').innerHTML = Object.entries(bx).map(([la, b]) => {
+    const c = LAYERS[la].c;
+    const lbl = LAYERS[la].l.toUpperCase();
+    return `
+      <rect x="${b.x0}" y="${b.y0}" width="${b.x1-b.x0}" height="${b.y1-b.y0}"
+            rx="7" fill="${c}0c" stroke="${c}22" stroke-width="1"/>
+      <text x="${b.x0+8}" y="${b.y0+11}" fill="${c}" opacity="0.35"
+            font-size="8" font-family="system-ui" font-weight="700">${lbl}</text>
+    `;
+  }).join('');
+}
+
+function cpts(fn, tn) {
+  const fx = fn.x + fn.w / 2, fy = fn.y + fn.h / 2;
+  const tx = tn.x + tn.w / 2, ty = tn.y + tn.h / 2;
+  const dy = ty - fy, dx = tx - fx;
+  if (Math.abs(dy) >= Math.abs(dx) * 0.3) {
+    if (dy > 0) return { x1: fx, y1: fn.y + fn.h, x2: tx, y2: tn.y,       v: 1 };
+    else        return { x1: fx, y1: fn.y,          x2: tx, y2: tn.y + tn.h, v: 1 };
+  } else {
+    if (dx > 0) return { x1: fn.x + fn.w, y1: fy, x2: tn.x,        y2: ty, v: 0 };
+    else        return { x1: fn.x,         y1: fy, x2: tn.x + tn.w, y2: ty, v: 0 };
+  }
+}
+
+function drawConns(conns) {
+  document.getElementById('gc').innerHTML = conns.map(c => {
+    const fn = NM[c.f], tn = NM[c.t];
+    if (!fn || !tn) return '';
+    const ci = CT[c.tp];
+    const { x1, y1, x2, y2, v } = cpts(fn, tn);
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const path = v
+      ? `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`
+      : `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+    const da = ci.d ? `stroke-dasharray="${ci.d}"` : '';
+    const lb = c.lb ? `<text x="${mx}" y="${my - 4}" text-anchor="middle"
+        fill="${ci.c}" font-size="8" font-family="system-ui" opacity="0.7">${c.lb}</text>` : '';
+    return `<path d="${path}" fill="none" stroke="${ci.c}" stroke-width="1.2"
+        opacity="0.5" ${da} marker-end="url(#a-${c.tp})"/>${lb}`;
+  }).join('');
+}
+
+function drawNodes(nodes) {
+  document.getElementById('gn').innerHTML = nodes.map(n => {
+    const lc = LAYERS[n.la].c;
+    const hasA = S.anns.some(a => a.id === n.id);
+    const lines = n.lbl.split('\n');
+    const lh = 14;
+    const th = lines.length * lh;
+    const ty0 = n.y + n.h / 2 - th / 2 + lh * 0.72;
+    const tls = lines.map((line, i) =>
+      `<tspan x="${n.x + n.w / 2}" ${i ? `dy="${lh}"` : `y="${ty0}"`}
+              fill="${lc}" font-size="11" font-weight="600">${line}</tspan>`
+    ).join('');
+    const ad = hasA
+      ? `<circle cx="${n.x + n.w - 5}" cy="${n.y + 5}" r="3.5" fill="#58a6ff"/>`
+      : '';
+    const stk = hasA ? '#58a6ff' : lc + '45';
+    const sw  = hasA ? 1.5 : 1;
+    return `
+      <g data-nid="${n.id}" onclick="oMod('${n.id}')" style="cursor:pointer"
+         onmouseenter="this.querySelector('rect').setAttribute('fill','${lc}22')"
+         onmouseleave="this.querySelector('rect').setAttribute('fill','${lc}10')">
+        <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="5"
+              fill="${lc}10" stroke="${stk}" stroke-width="${sw}"/>
+        <text text-anchor="middle" font-family="system-ui,sans-serif">${tls}</text>
+        ${ad}
+      </g>`;
+  }).join('');
+}
+
+function apT() {
+  document.getElementById('root').setAttribute('transform',
+    `translate(${S.t.x},${S.t.y}) scale(${S.t.s})`);
+}
+
+// ═══════════════════════════════════════════════════════
+// PRESET SWITCHING
+// ═══════════════════════════════════════════════════════
+
+function setP(id) {
+  S.p = id;
+  const map = { full: 'p-full', pipeline: 'p-pipe', engine: 'p-eng', nav: 'p-nav' };
+  Object.entries(map).forEach(([k, v]) => {
+    const el = document.getElementById(v);
+    if (el) el.classList.toggle('on', k === id);
+  });
+  redraw();
+  updP();
+  setTimeout(fitV, 60);
+}
+
+// ═══════════════════════════════════════════════════════
+// PAN / ZOOM
+// ═══════════════════════════════════════════════════════
+
+function setupPan() {
+  const svg = document.getElementById('svgc');
+  let drag = false, lx = 0, ly = 0;
+  svg.addEventListener('mousedown', e => {
+    if (e.target.closest('[data-nid]')) return;
+    drag = true; lx = e.clientX; ly = e.clientY;
+  });
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    S.t.x += e.clientX - lx; S.t.y += e.clientY - ly;
+    lx = e.clientX; ly = e.clientY;
+    apT();
+  });
+  window.addEventListener('mouseup', () => drag = false);
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.12 : 0.88;
+    const r = svg.getBoundingClientRect();
+    doZA(f, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+}
+
+function doZ(f) {
+  const r = document.getElementById('svgc').getBoundingClientRect();
+  doZA(f, r.width / 2, r.height / 2);
+}
+
+function doZA(f, px, py) {
+  const ns = Math.min(Math.max(S.t.s * f, 0.1), 5);
+  const rt = ns / S.t.s;
+  S.t.x = px + (S.t.x - px) * rt;
+  S.t.y = py + (S.t.y - py) * rt;
+  S.t.s = ns;
+  apT();
+}
+
+function rstT() {
+  S.t = { x: 20, y: 20, s: 0.73 };
+  apT();
+}
+
+function fitV() {
+  const vn = visNodes();
+  if (!vn.length) return;
+  const svg = document.getElementById('svgc');
+  const r = svg.getBoundingClientRect();
+  const pad = 32;
+  const x0 = Math.min(...vn.map(n => n.x))        - pad;
+  const y0 = Math.min(...vn.map(n => n.y))        - pad;
+  const x1 = Math.max(...vn.map(n => n.x + n.w)) + pad;
+  const y1 = Math.max(...vn.map(n => n.y + n.h)) + pad;
+  const sc = Math.min(r.width / (x1 - x0), r.height / (y1 - y0), 1.8);
+  S.t = {
+    x: (r.width  - (x1 - x0) * sc) / 2 - x0 * sc,
+    y: (r.height - (y1 - y0) * sc) / 2 - y0 * sc,
+    s: sc,
+  };
+  apT();
+}
+
+// ═══════════════════════════════════════════════════════
+// TOGGLES
+// ═══════════════════════════════════════════════════════
+
+function togL(id, v) { S.ly[id] = v; redraw(); updP(); }
+function togC(id, v) { S.ct[id] = v; redraw(); }
+
+// ═══════════════════════════════════════════════════════
+// ANNOTATIONS (click-to-comment)
+// ═══════════════════════════════════════════════════════
+
+function oMod(nid) {
+  S.an = NM[nid];
+  document.getElementById('mn').textContent = S.an.lbl.replace('\n', ' ');
+  document.getElementById('mf').textContent = S.an.f;
+  const existing = S.anns.find(a => a.id === nid);
+  document.getElementById('mt').value = existing ? existing.txt : '';
+  document.getElementById('mob').classList.add('open');
+  setTimeout(() => document.getElementById('mt').focus(), 60);
+}
+
+function cMod() {
+  document.getElementById('mob').classList.remove('open');
+  S.an = null;
+}
+
+function svAnn() {
+  const txt = document.getElementById('mt').value.trim();
+  if (!txt) { cMod(); return; }
+  S.anns = S.anns.filter(a => a.id !== S.an.id);
+  S.anns.push({ id: S.an.id, lbl: S.an.lbl.replace('\n', ' '), f: S.an.f, txt });
+  cMod();
+  redraw();
+  rendAnns();
+  updP();
+}
+
+function delAnn(id) {
+  S.anns = S.anns.filter(a => a.id !== id);
+  redraw();
+  rendAnns();
+  updP();
+}
+
+function rendAnns() {
+  document.getElementById('ann-cnt').textContent = S.anns.length;
+  const el = document.getElementById('al');
+  if (!S.anns.length) {
+    el.innerHTML = '<div class="no-ann">Click any node to annotate.</div>';
+    return;
+  }
+  el.innerHTML = S.anns.map(a => `
+    <div class="ann-card">
+      <button class="delbtn" onclick="delAnn('${a.id}')">×</button>
+      <div class="ann-name">${a.lbl}</div>
+      <div class="ann-txt">${a.txt.length > 80 ? a.txt.slice(0, 80) + '…' : a.txt}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// PROMPT OUTPUT
+// ═══════════════════════════════════════════════════════
+
+function updP() {
+  const pr   = PS[S.p];
+  const hidn = Object.entries(S.ly).filter(([, v]) => !v).map(([k]) => LAYERS[k].l);
+  let p = `This is the Mobile AI Workout Coach architecture, showing ${pr.d}.`;
+  if (hidn.length) p += ` Hidden layers: ${hidn.join(', ')}.`;
+  if (S.anns.length) {
+    p += '\n\nComponent notes:\n';
+    S.anns.forEach(a => { p += `\n**${a.lbl}** (${a.f}):\n${a.txt}\n`; });
+  } else {
+    p += '\n\nPlease review this architecture diagram and suggest improvements or flag concerns.';
+  }
+  document.getElementById('prompt-out').value = p;
+}
+
+function doCopy() {
+  navigator.clipboard.writeText(document.getElementById('prompt-out').value).then(() => {
+    const b = document.querySelector('.cp-btn');
+    b.textContent = 'Copied!';
+    setTimeout(() => b.textContent = 'Copy Prompt', 1600);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL EVENTS
+// ═══════════════════════════════════════════════════════
+
+document.getElementById('mob').addEventListener('click', e => {
+  if (e.target === e.currentTarget) cMod();
+});
+document.getElementById('mt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.ctrlKey) svAnn();
+});
+
+// ═══════════════════════════════════════════════════════
+// GO
+// ═══════════════════════════════════════════════════════
+
+init();
+</script>
+</body>
+</html>

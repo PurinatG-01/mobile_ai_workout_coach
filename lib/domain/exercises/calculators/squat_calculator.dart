@@ -195,12 +195,7 @@ class SquatCalculator implements ExerciseCalculator {
     );
   }
 
-  bool _isStandingPreparePose(double? selectedKneeDeg) {
-    // Keep the auto-start/countdown gated on an upright standing posture.
-    return selectedKneeDeg != null && selectedKneeDeg >= _kneeTopDeg;
-  }
-
-  void _resetRepTracking() {
+void _resetRepTracking() {
     _repPhase = ExerciseRepPhase.unknown;
     _prevActiveKneeDeg = null;
     _hasReachedBottomInThisRep = false;
@@ -322,24 +317,12 @@ class SquatCalculator implements ExerciseCalculator {
     bool autoSetLifecycle = true,
     bool autoEndSetLifecycle = true,
   }) {
-    // Best leg is used for prepare/break decisions and as the initial leg to
-    // lock when the set becomes active.
     final bestLegNow = _selectBestLeg(pose);
-
-    // Break pose (auto-end) should ONLY mean the user left the context
-    // (e.g. out of frame / no usable leg landmarks). Squat bottom position must
-    // not be treated as break.
-    final isBreakPose = bestLegNow == null;
     final metrics = ExerciseFrameMetrics();
 
     // Expose both knee angles (when available) for debugging/UI.
     final leftKneeDeg = _leftKneeDeg(pose);
     final rightKneeDeg = _rightKneeDeg(pose);
-
-    // For countdown/prepare, use the best visible leg only.
-    final bestKneeDeg =
-        bestLegNow == null ? null : _kneeDegForSelectedLeg(pose, bestLegNow);
-    final isPreparePose = _isStandingPreparePose(bestKneeDeg);
 
     if (leftKneeDeg != null) {
       metrics[ExerciseMetric.leftKneeDeg] = leftKneeDeg;
@@ -348,9 +331,11 @@ class SquatCalculator implements ExerciseCalculator {
       metrics[ExerciseMetric.rightKneeDeg] = rightKneeDeg;
     }
 
+    // Never let pose state interrupt or auto-end the set — lifecycle is driven
+    // purely by the start/end button signals.
     final lifecycleEvent = _lifecycle.tick(
-      isPreparePose: isPreparePose,
-      isBreakPose: isBreakPose,
+      isPreparePose: true,
+      isBreakPose: false,
       timestamp: timestamp,
       startCountdownSignal: startCountdown,
       startSignal: startSet,

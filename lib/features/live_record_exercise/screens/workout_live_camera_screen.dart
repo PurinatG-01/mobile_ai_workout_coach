@@ -243,7 +243,7 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
             timestamp: DateTime.now(),
             startCountdown: startCountdown,
             autoSetLifecycle: false,
-            autoEndSetLifecycle: true,
+            autoEndSetLifecycle: false,
           );
 
     final didEndByBreakPose = result?.didEndSetByBreakPose ?? false;

@@ -21,8 +21,7 @@ class CameraPermissionScreen extends StatefulWidget {
   final VoidCallback? onSkipped;
 
   @override
-  State<CameraPermissionScreen> createState() =>
-      _CameraPermissionScreenState();
+  State<CameraPermissionScreen> createState() => _CameraPermissionScreenState();
 }
 
 class _CameraPermissionScreenState extends State<CameraPermissionScreen>
@@ -81,7 +80,8 @@ class _CameraPermissionScreenState extends State<CameraPermissionScreen>
       );
     }
 
-    final isDenied = status.isPermanentlyDenied;
+    // On iOS, `denied` also prevents re-prompting — treat it like permanentlyDenied.
+    final isDenied = status.isPermanentlyDenied || status.isDenied;
 
     return Scaffold(
       body: Column(
@@ -124,7 +124,6 @@ class _CameraPermissionScreenState extends State<CameraPermissionScreen>
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-
                   if (isDenied) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -144,15 +143,12 @@ class _CameraPermissionScreenState extends State<CameraPermissionScreen>
                   ] else ...[
                     const Text(
                       'This app uses your camera to track workouts in real time.',
-                      style: TextStyle(color: Colors.white70),
+                      style: TextStyle(color: Colors.black),
                     ),
                     const SizedBox(height: 16),
                   ],
-
                   _FeatureList(dimmed: isDenied),
-
                   const Spacer(),
-
                   if (isDenied) ...[
                     FilledButton(
                       onPressed: () => widget.service.openSettings(),
@@ -232,9 +228,9 @@ class _FeatureRow extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: dimmed ? Colors.white38 : Colors.white70,
+            color: dimmed ? Colors.black : Colors.grey,
             decoration: dimmed ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.white38,
+            decorationColor: Colors.black,
           ),
         ),
       ],

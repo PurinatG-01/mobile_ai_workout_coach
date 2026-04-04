@@ -9,6 +9,15 @@ import '../models/exercise_rep_phase.dart';
 import '../models/exercise_set_stage.dart';
 import '../set_lifecycle_controller.dart';
 
+/// Bicep curl rep/phase calculator.
+///
+/// The set lifecycle is driven entirely by button signals — no automatic
+/// start, end, or interruption based on pose. When landmarks are missing,
+/// all rep/phase state is preserved until they return.
+///
+/// Rep counting: both arms extended (≥ 160°) → both arms curled (≤ 60°) = one rep.
+/// Mid-zone phase is derived from the last confirmed extreme (top/bottom) to
+/// avoid flickering from frame-to-frame noise.
 class BicepCurlCalculator implements ExerciseCalculator {
   BicepCurlCalculator({
     SetLifecycleController? lifecycle,
@@ -22,102 +31,25 @@ class BicepCurlCalculator implements ExerciseCalculator {
   final PoseAngleService _poseAngles;
 
   bool _repArmed = false;
-  double? _lastAvgElbowDeg;
 
-  DateTime? _missingPrepareSince;
-  double? _baselineWaistAngleDeg;
+  /// Last confirmed extreme zone: bottom (extended) or top (curled).
+  ///
+  /// Used to classify the mid-zone phase without relying on frame-to-frame
+  /// deltas, which are noisy. Once we know the user was last at bottom, any
+  /// mid-zone frame must be concentric (curling up). Once last at top, any
+  /// mid-zone frame must be eccentric (uncurling down).
+  ExerciseRepPhase _lastConfirmedZone = ExerciseRepPhase.unknown;
 
   static const double _extendedThresholdDeg = 160;
   static const double _curledThresholdDeg = 60;
-  static const double _phaseDeltaEpsilonDeg = 1;
-
-  // End-set "break" signal (intentional): bend down relative to start pose.
-  //
-  // We model this as a significant decrease in the waist/hip angle
-  // (shoulder-hip-knee) compared to the set's starting posture.
-  //
-  // This works for both standing curls (baseline near 180°) and sitting curls
-  // (baseline near ~90°), because the threshold is relative to baseline.
-  static const double _breakWaistAngleDeltaDeg = 30;
-
-  // Pose-missing break: if the pose disappears entirely (user steps away / big
-  // camera shift), end the set only after a hold to avoid transient blips.
-  static const Duration _breakMissingPoseHoldDuration =
-      Duration(milliseconds: 1500);
-
-  static const _requiredLandmarks = <PoseLandmarkType>{
-    PoseLandmarkType.leftShoulder,
-    PoseLandmarkType.leftElbow,
-    PoseLandmarkType.leftWrist,
-    PoseLandmarkType.rightShoulder,
-    PoseLandmarkType.rightElbow,
-    PoseLandmarkType.rightWrist,
-  };
 
   @override
   void reset() {
     _reps = 0;
     _repPhase = ExerciseRepPhase.unknown;
     _repArmed = false;
-    _lastAvgElbowDeg = null;
-    _missingPrepareSince = null;
-    _baselineWaistAngleDeg = null;
+    _lastConfirmedZone = ExerciseRepPhase.unknown;
     _lifecycle.reset();
-  }
-
-  bool _isPreparePose(Pose pose) {
-    for (final t in _requiredLandmarks) {
-      if (!pose.landmarks.containsKey(t)) return false;
-    }
-    return true;
-  }
-
-  double? _waistAngleDegFromPose(Pose pose) {
-    final left = _poseAngles.angleDegreesFromPose(
-      pose: pose,
-      a: PoseLandmarkType.leftShoulder,
-      b: PoseLandmarkType.leftHip,
-      c: PoseLandmarkType.leftKnee,
-    );
-    final right = _poseAngles.angleDegreesFromPose(
-      pose: pose,
-      a: PoseLandmarkType.rightShoulder,
-      b: PoseLandmarkType.rightHip,
-      c: PoseLandmarkType.rightKnee,
-    );
-
-    if (left == null && right == null) return null;
-    if (left == null) return right;
-    if (right == null) return left;
-    return (left + right) / 2;
-  }
-
-  bool _isBreakPose({
-    required Pose pose,
-    required double? leftElbowDeg,
-    required double? rightElbowDeg,
-    required DateTime timestamp,
-    required double? waistAngleDeg,
-  }) {
-    // If the pose disappears entirely (user steps away / big camera shift),
-    // end the set only after a longer hold to avoid transient detection blips.
-    if (!_isPreparePose(pose)) {
-      _missingPrepareSince ??= timestamp;
-
-      final since = _missingPrepareSince!;
-      return timestamp.difference(since) >= _breakMissingPoseHoldDuration;
-    }
-    _missingPrepareSince = null;
-
-    if (leftElbowDeg == null || rightElbowDeg == null) {
-      return false;
-    }
-
-    final baseline = _baselineWaistAngleDeg;
-    if (baseline == null || waistAngleDeg == null) return false;
-
-    // Smaller hip angle => more flexion / more bent down.
-    return waistAngleDeg <= baseline - _breakWaistAngleDeltaDeg;
   }
 
   @override
@@ -130,9 +62,8 @@ class BicepCurlCalculator implements ExerciseCalculator {
     bool autoSetLifecycle = true,
     bool autoEndSetLifecycle = true,
   }) {
-    final isPreparePose = _isPreparePose(pose);
     final metrics = ExerciseFrameMetrics();
-    final waistAngleDeg = _waistAngleDegFromPose(pose);
+
     final leftElbowDeg = _poseAngles.angleDegreesFromPose(
       pose: pose,
       a: PoseLandmarkType.leftShoulder,
@@ -146,17 +77,13 @@ class BicepCurlCalculator implements ExerciseCalculator {
       c: PoseLandmarkType.rightWrist,
     );
 
-    final isBreakPose = _isBreakPose(
-      pose: pose,
-      leftElbowDeg: leftElbowDeg,
-      rightElbowDeg: rightElbowDeg,
-      timestamp: timestamp,
-      waistAngleDeg: waistAngleDeg,
-    );
+    if (leftElbowDeg != null) metrics[ExerciseMetric.leftElbowDeg] = leftElbowDeg;
+    if (rightElbowDeg != null) metrics[ExerciseMetric.rightElbowDeg] = rightElbowDeg;
 
+    // Lifecycle is driven purely by button signals — pose never interrupts.
     final lifecycleEvent = _lifecycle.tick(
-      isPreparePose: isPreparePose,
-      isBreakPose: isBreakPose,
+      isPreparePose: true,
+      isBreakPose: false,
       timestamp: timestamp,
       startCountdownSignal: startCountdown,
       startSignal: startSet,
@@ -169,65 +96,49 @@ class BicepCurlCalculator implements ExerciseCalculator {
       _reps = 0;
       _repPhase = ExerciseRepPhase.unknown;
       _repArmed = false;
-      _lastAvgElbowDeg = null;
-      _missingPrepareSince = null;
-      _baselineWaistAngleDeg = waistAngleDeg;
+      _lastConfirmedZone = ExerciseRepPhase.unknown;
     }
 
     if (lifecycleEvent.didEndSet) {
       _repPhase = ExerciseRepPhase.unknown;
       _repArmed = false;
-      _lastAvgElbowDeg = null;
-      _missingPrepareSince = null;
-      _baselineWaistAngleDeg = null;
-    }
-
-    // Capture baseline lazily if the set started without lower-body landmarks.
-    if (_lifecycle.stage == ExerciseSetStage.active &&
-        _baselineWaistAngleDeg == null &&
-        waistAngleDeg != null) {
-      _baselineWaistAngleDeg = waistAngleDeg;
-    }
-    if (leftElbowDeg != null) {
-      metrics[ExerciseMetric.leftElbowDeg] = leftElbowDeg;
-    }
-    if (rightElbowDeg != null) {
-      metrics[ExerciseMetric.rightElbowDeg] = rightElbowDeg;
+      _lastConfirmedZone = ExerciseRepPhase.unknown;
     }
 
     if (_lifecycle.stage == ExerciseSetStage.active) {
+      // When landmarks are missing, skip this frame — state is preserved.
       if (leftElbowDeg != null && rightElbowDeg != null) {
         final bothExtended = leftElbowDeg >= _extendedThresholdDeg &&
             rightElbowDeg >= _extendedThresholdDeg;
         final bothCurled = leftElbowDeg <= _curledThresholdDeg &&
             rightElbowDeg <= _curledThresholdDeg;
 
-        final avgElbowDeg = (leftElbowDeg + rightElbowDeg) / 2;
-
         if (bothExtended) {
           _repPhase = ExerciseRepPhase.bottom;
+          _lastConfirmedZone = ExerciseRepPhase.bottom;
           _repArmed = true;
         } else if (bothCurled) {
           _repPhase = ExerciseRepPhase.top;
+          _lastConfirmedZone = ExerciseRepPhase.top;
           if (_repArmed) {
             _reps += 1;
             _repArmed = false;
           }
         } else {
-          final lastAvg = _lastAvgElbowDeg;
-          if (lastAvg == null) {
-            _repPhase = ExerciseRepPhase.unknown;
-          } else if (avgElbowDeg < lastAvg - _phaseDeltaEpsilonDeg) {
-            _repPhase = ExerciseRepPhase.concentric;
-          } else if (avgElbowDeg > lastAvg + _phaseDeltaEpsilonDeg) {
-            _repPhase = ExerciseRepPhase.eccentric;
+          // Mid-zone: direction based on last confirmed extreme.
+          // bottom → mid = curling up = concentric
+          // top → mid   = uncurling down = eccentric
+          switch (_lastConfirmedZone) {
+            case ExerciseRepPhase.bottom:
+              _repPhase = ExerciseRepPhase.concentric;
+            case ExerciseRepPhase.top:
+              _repPhase = ExerciseRepPhase.eccentric;
+            case ExerciseRepPhase.unknown:
+            case ExerciseRepPhase.concentric:
+            case ExerciseRepPhase.eccentric:
+              _repPhase = ExerciseRepPhase.unknown;
           }
         }
-
-        _lastAvgElbowDeg = avgElbowDeg;
-      } else {
-        _repPhase = ExerciseRepPhase.unknown;
-        _lastAvgElbowDeg = null;
       }
     }
 
