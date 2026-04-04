@@ -13,15 +13,15 @@ import '../set_lifecycle_controller.dart';
 
 enum _ElbowZone { top, mid, bottom }
 
-enum _ElbowTrend { unknown, goingDown, goingUp }
-
 /// Push-up rep/phase calculator.
 ///
 /// The set lifecycle is driven entirely by button signals — no automatic
 /// start, end, or interruption based on pose. When landmarks are missing,
 /// all rep/phase state is preserved until they return.
 ///
-/// Rep counting: bottom (elbow ≤ 90°) → top (elbow ≥ 160°) = one rep.
+/// Mid-zone phase (eccentric/concentric) is derived from the last confirmed
+/// extreme zone (top/bottom), not from a frame-to-frame delta, so it is
+/// stable under landmark jitter.
 class PushUpCalculator implements ExerciseCalculator {
   PushUpCalculator({
     SetLifecycleController? lifecycle,
@@ -34,18 +34,18 @@ class PushUpCalculator implements ExerciseCalculator {
   final SetLifecycleController _lifecycle;
   final PoseAngleService _poseAngles;
 
-  double? _prevActiveElbowDeg;
   bool _hasReachedBottomInThisRep = false;
   Set<PoseLandmarkType>? _lockedArmLandmarks;
-
   _ElbowZone _elbowZone = _ElbowZone.mid;
-  _ElbowTrend _elbowTrend = _ElbowTrend.unknown;
+
+  /// Last confirmed extreme zone (top or bottom).
+  /// Mid-zone phase is read from this rather than a frame-to-frame delta.
+  ExerciseRepPhase _lastConfirmedZone = ExerciseRepPhase.unknown;
 
   static const double _elbowTopDeg = 160;
-  static const double _elbowTopExitDeg = 155;
   static const double _elbowBottomDeg = 90;
+  static const double _elbowTopExitDeg = 155;
   static const double _elbowBottomExitDeg = 95;
-  static const double _elbowDeltaDeadbandDeg = 2;
 
   static const _leftArmLandmarks = <PoseLandmarkType>{
     PoseLandmarkType.leftShoulder,
@@ -63,19 +63,22 @@ class PushUpCalculator implements ExerciseCalculator {
   void reset() {
     _reps = 0;
     _repPhase = ExerciseRepPhase.unknown;
-    _prevActiveElbowDeg = null;
     _hasReachedBottomInThisRep = false;
-    _lockedArmLandmarks = null;
     _elbowZone = _ElbowZone.mid;
-    _elbowTrend = _ElbowTrend.unknown;
+    _lastConfirmedZone = ExerciseRepPhase.unknown;
+    _lockedArmLandmarks = null;
     _lifecycle.reset();
   }
 
-  ({
-    PoseLandmarkType shoulder,
-    PoseLandmarkType elbow,
-    PoseLandmarkType wrist,
-  }) _armChainFor(Set<PoseLandmarkType> landmarks) {
+  void _resetRepTracking() {
+    _repPhase = ExerciseRepPhase.unknown;
+    _hasReachedBottomInThisRep = false;
+    _elbowZone = _ElbowZone.mid;
+    _lastConfirmedZone = ExerciseRepPhase.unknown;
+  }
+
+  ({PoseLandmarkType shoulder, PoseLandmarkType elbow, PoseLandmarkType wrist})
+      _armChainFor(Set<PoseLandmarkType> landmarks) {
     if (landmarks.contains(PoseLandmarkType.leftShoulder)) {
       return (
         shoulder: PoseLandmarkType.leftShoulder,
@@ -124,12 +127,11 @@ class PushUpCalculator implements ExerciseCalculator {
 
     final leftScore = seg(ls, le) + seg(le, lw);
     final rightScore = seg(rs, re) + seg(re, rw);
-
     return leftScore >= rightScore ? _leftArmLandmarks : _rightArmLandmarks;
   }
 
-  double? _elbowDegForArm(Pose pose, Set<PoseLandmarkType> landmarks) {
-    final chain = _armChainFor(landmarks);
+  double? _elbowDegFor(Pose pose, Set<PoseLandmarkType> arm) {
+    final chain = _armChainFor(arm);
     return _poseAngles.angleDegreesFromPose(
       pose: pose,
       a: chain.shoulder,
@@ -138,30 +140,13 @@ class PushUpCalculator implements ExerciseCalculator {
     );
   }
 
-  void _resetRepTracking() {
-    _repPhase = ExerciseRepPhase.unknown;
-    _prevActiveElbowDeg = null;
-    _hasReachedBottomInThisRep = false;
-    _elbowZone = _ElbowZone.mid;
-    _elbowTrend = _ElbowTrend.unknown;
-  }
-
   void _updatePhaseAndReps({required double elbowDeg}) {
-    final prev = _prevActiveElbowDeg;
-    final delta = prev == null ? null : elbowDeg - prev;
-    final prevZone = _elbowZone;
-
+    // Zone transitions with hysteresis.
     switch (_elbowZone) {
       case _ElbowZone.top:
-        if (elbowDeg < _elbowTopExitDeg) {
-          _elbowZone = _ElbowZone.mid;
-          if (elbowDeg <= _elbowBottomDeg) _elbowZone = _ElbowZone.bottom;
-        }
+        if (elbowDeg < _elbowTopExitDeg) _elbowZone = _ElbowZone.mid;
       case _ElbowZone.bottom:
-        if (elbowDeg > _elbowBottomExitDeg) {
-          _elbowZone = _ElbowZone.mid;
-          if (elbowDeg >= _elbowTopDeg) _elbowZone = _ElbowZone.top;
-        }
+        if (elbowDeg > _elbowBottomExitDeg) _elbowZone = _ElbowZone.mid;
       case _ElbowZone.mid:
         if (elbowDeg >= _elbowTopDeg) {
           _elbowZone = _ElbowZone.top;
@@ -170,59 +155,35 @@ class PushUpCalculator implements ExerciseCalculator {
         }
     }
 
-    if (prevZone != _elbowZone) {
-      if (prevZone == _ElbowZone.top && _elbowZone == _ElbowZone.mid) {
-        _elbowTrend = _ElbowTrend.goingDown;
-      } else if (prevZone == _ElbowZone.bottom && _elbowZone == _ElbowZone.mid) {
-        _elbowTrend = _ElbowTrend.goingUp;
-      }
+    // Confirm extreme zones and count reps.
+    switch (_elbowZone) {
+      case _ElbowZone.top:
+        _lastConfirmedZone = ExerciseRepPhase.top;
+        _repPhase = ExerciseRepPhase.top;
+        if (_hasReachedBottomInThisRep) {
+          _reps += 1;
+          _hasReachedBottomInThisRep = false;
+        }
+      case _ElbowZone.bottom:
+        _lastConfirmedZone = ExerciseRepPhase.bottom;
+        _repPhase = ExerciseRepPhase.bottom;
+        _hasReachedBottomInThisRep = true;
+      case _ElbowZone.mid:
+        // Mid-zone direction comes from the last confirmed extreme, not a delta.
+        // bottom → mid = pressing up = concentric
+        // top → mid   = lowering down = eccentric
+        switch (_lastConfirmedZone) {
+          case ExerciseRepPhase.bottom:
+            _repPhase = ExerciseRepPhase.concentric;
+          case ExerciseRepPhase.top:
+            _repPhase = ExerciseRepPhase.eccentric;
+          case ExerciseRepPhase.unknown:
+          case ExerciseRepPhase.concentric:
+          case ExerciseRepPhase.eccentric:
+            _repPhase = ExerciseRepPhase.unknown;
+        }
     }
-
-    if (_elbowZone == _ElbowZone.mid &&
-        delta != null &&
-        delta.abs() >= _elbowDeltaDeadbandDeg) {
-      _elbowTrend = delta > 0 ? _ElbowTrend.goingUp : _ElbowTrend.goingDown;
-    }
-
-    if (_elbowZone == _ElbowZone.bottom) {
-      _hasReachedBottomInThisRep = true;
-    }
-    if (_elbowZone == _ElbowZone.top && _hasReachedBottomInThisRep) {
-      _reps += 1;
-      _hasReachedBottomInThisRep = false;
-    }
-
-    if (_elbowZone == _ElbowZone.top) {
-      _repPhase = ExerciseRepPhase.top;
-    } else if (_elbowZone == _ElbowZone.bottom) {
-      _repPhase = ExerciseRepPhase.bottom;
-    } else {
-      switch (_elbowTrend) {
-        case _ElbowTrend.goingUp:
-          _repPhase = ExerciseRepPhase.concentric;
-        case _ElbowTrend.goingDown:
-          _repPhase = ExerciseRepPhase.eccentric;
-        case _ElbowTrend.unknown:
-          _repPhase = ExerciseRepPhase.unknown;
-      }
-    }
-
-    _prevActiveElbowDeg = elbowDeg;
   }
-
-  double? _leftElbowDeg(Pose pose) => _poseAngles.angleDegreesFromPose(
-        pose: pose,
-        a: PoseLandmarkType.leftShoulder,
-        b: PoseLandmarkType.leftElbow,
-        c: PoseLandmarkType.leftWrist,
-      );
-
-  double? _rightElbowDeg(Pose pose) => _poseAngles.angleDegreesFromPose(
-        pose: pose,
-        a: PoseLandmarkType.rightShoulder,
-        b: PoseLandmarkType.rightElbow,
-        c: PoseLandmarkType.rightWrist,
-      );
 
   @override
   ExerciseFrameResult? update({
@@ -235,8 +196,20 @@ class PushUpCalculator implements ExerciseCalculator {
     bool autoEndSetLifecycle = true,
   }) {
     final metrics = ExerciseFrameMetrics();
-    final leftE = _leftElbowDeg(pose);
-    final rightE = _rightElbowDeg(pose);
+    final bestArmNow = _selectBestArm(pose);
+
+    final leftE = _poseAngles.angleDegreesFromPose(
+      pose: pose,
+      a: PoseLandmarkType.leftShoulder,
+      b: PoseLandmarkType.leftElbow,
+      c: PoseLandmarkType.leftWrist,
+    );
+    final rightE = _poseAngles.angleDegreesFromPose(
+      pose: pose,
+      a: PoseLandmarkType.rightShoulder,
+      b: PoseLandmarkType.rightElbow,
+      c: PoseLandmarkType.rightWrist,
+    );
     if (leftE != null) metrics[ExerciseMetric.leftElbowDeg] = leftE;
     if (rightE != null) metrics[ExerciseMetric.rightElbowDeg] = rightE;
 
@@ -254,12 +227,10 @@ class PushUpCalculator implements ExerciseCalculator {
 
     if (lifecycleEvent.didStartSet) {
       _resetRepTracking();
-      _lockedArmLandmarks = _selectBestArm(pose);
+      _lockedArmLandmarks = bestArmNow;
     }
 
     if (_lifecycle.stage == ExerciseSetStage.active) {
-      final bestArmNow = _selectBestArm(pose);
-
       // Prefer locked arm while still visible; fall back to best visible arm.
       final activeArm = (_lockedArmLandmarks != null &&
               _hasArmChain(pose, _lockedArmLandmarks!))
@@ -271,8 +242,7 @@ class PushUpCalculator implements ExerciseCalculator {
         _lockedArmLandmarks = activeArm;
       }
 
-      final activeElbowDeg =
-          activeArm == null ? null : _elbowDegForArm(pose, activeArm);
+      final activeElbowDeg = activeArm == null ? null : _elbowDegFor(pose, activeArm);
 
       // When landmarks are missing, skip this frame — state is preserved.
       if (activeElbowDeg != null) {
