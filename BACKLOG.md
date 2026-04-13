@@ -24,6 +24,7 @@
 - [x] 16 — UI: Overlay reps/phase/tempo UI (placeholder overlay)
 - [ ] 17 — UI: Debug landmarks/skeleton overlay
 - [ ] 18 — ENGINE: Push-up rep counter logic — ⚠️ PENDING physical test (code cleaned + thresholds tuned, real-world rep counting unverified)
+- [ ] 18b — ENGINE: Pull-up rep counter logic — ⚠️ PENDING physical test (elbow-angle-only bilateral approach, thresholds need calibration)
 - [ ] 19 — ENGINE: Tempo tracking per rep
 - [ ] 20 — COACH: Feedback engine minimal cues
 - [ ] 21 — UI: Performance stats display
