@@ -244,8 +244,6 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
             pose: pose,
             timestamp: DateTime.now(),
             startCountdown: startCountdown,
-            autoSetLifecycle: false,
-            autoEndSetLifecycle: false,
           );
 
     final didEndByBreakPose = result?.didEndSetByBreakPose ?? false;
@@ -265,14 +263,14 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
     });
 
     if (didEndByBreakPose && mounted) {
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Break pose detected — set ended'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Break pose detected — set ended'),
+            duration: Duration(seconds: 2),
+          ),
+        );
     }
   }
 

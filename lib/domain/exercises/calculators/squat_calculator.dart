@@ -11,17 +11,34 @@ import '../models/exercise_rep_phase.dart';
 import '../models/exercise_set_stage.dart';
 import '../set_lifecycle_controller.dart';
 
+/// The three positional zones the knee angle can be in during a squat.
 enum _KneeZone { top, mid, bottom }
 
-/// Squat rep/phase calculator optimised for a side-camera setup.
+/// Squat rep and phase calculator, optimised for a side-camera view.
 ///
-/// The set lifecycle is driven entirely by button signals — no automatic
-/// start, end, or interruption based on pose. When landmarks are missing,
-/// all rep/phase state is preserved until they return.
+/// ## Rep counting
+/// A rep completes when the user descends to [_KneeZone.bottom] (deep squat)
+/// and then returns to [_KneeZone.top] (standing). Movements that never
+/// reach the bottom zone are not counted.
 ///
-/// Mid-zone phase (eccentric/concentric) is derived from the last confirmed
-/// extreme zone (top/bottom), not from a frame-to-frame delta, so it is
-/// stable under landmark jitter.
+/// ## Phase detection
+/// While the knee angle is in the mid zone, the direction is determined by
+/// the last confirmed extreme zone — not by comparing angles frame-to-frame.
+///   - Last confirmed = bottom → now rising    = concentric (coming up)
+///   - Last confirmed = top    → now descending = eccentric  (going down)
+///
+/// ## Leg selection
+/// At set start the calculator locks onto the leg whose hip→knee→ankle
+/// segments are longest in screen space (the leg most visible from the side).
+/// If that leg disappears mid-set it falls back to whichever leg is visible.
+///
+/// ## Set lifecycle
+/// Always manual — driven by startCountdown / startSet / endSet signals.
+/// Pose alone never starts or ends a set.
+///
+/// ## Missing landmarks
+/// When the active leg's landmarks are missing the frame is skipped.
+/// Phase and rep state are preserved until landmarks return.
 class SquatCalculator implements ExerciseCalculator {
   SquatCalculator({
     SetLifecycleController? lifecycle,
@@ -29,35 +46,69 @@ class SquatCalculator implements ExerciseCalculator {
   })  : _lifecycle = lifecycle ?? SetLifecycleController(),
         _poseAngles = poseAngles ?? const PoseAngleService();
 
-  int _reps = 0;
-  ExerciseRepPhase _repPhase = ExerciseRepPhase.unknown;
+  // ── dependencies ───────────────────────────────────────────────────────────
+
   final SetLifecycleController _lifecycle;
   final PoseAngleService _poseAngles;
 
-  bool _hasReachedBottomInThisRep = false;
-  Set<PoseLandmarkType>? _lockedLegLandmarks;
+  // ── phase / rep state ──────────────────────────────────────────────────────
+
+  int _reps = 0;
+  ExerciseRepPhase _repPhase = ExerciseRepPhase.unknown;
+
+  /// The current hysteresis zone the knee angle sits in.
   _KneeZone _kneeZone = _KneeZone.mid;
 
-  /// Last confirmed extreme zone (top or bottom).
-  /// Mid-zone phase is read from this rather than a frame-to-frame delta.
+  /// Set once the user reaches the bottom zone within a rep.
+  /// The rep is only counted when they subsequently return to the top zone.
+  bool _hasReachedBottomInThisRep = false;
+
+  /// Tracks the last confirmed extreme (top or bottom).
+  /// Determines whether the mid zone is eccentric or concentric.
   ExerciseRepPhase _lastConfirmedZone = ExerciseRepPhase.unknown;
 
-  static const double _kneeTopDeg = 165;
-  static const double _kneeBottomDeg = 120;
-  static const double _kneeTopExitDeg = 160;
-  static const double _kneeBottomExitDeg = 125;
+  // ── leg-lock state ─────────────────────────────────────────────────────────
 
-  static const _leftLegLandmarks = <PoseLandmarkType>{
+  /// The leg (left or right) locked at set start.
+  /// Null until the first set begins.
+  Set<PoseLandmarkType>? _lockedLeg;
+
+  // ── angle thresholds ───────────────────────────────────────────────────────
+
+  /// Knee angle to enter the top zone: leg is substantially straight (standing).
+  /// Set lower than anatomical full extension (~170°+) to compensate for ML Kit
+  /// underreporting the angle by 5–10° due to landmark jitter.
+  static const double _topEntryDeg = 160;
+
+  /// Knee angle to exit the top zone.
+  /// 10° gap vs entry absorbs ML Kit jitter so a single noisy frame cannot
+  /// knock the user out of the top zone.
+  static const double _topExitDeg = 150;
+
+  /// Knee angle to enter the bottom zone: knee is adequately bent (squat depth).
+  /// Slightly permissive to allow for camera angle and minor form variation.
+  static const double _bottomEntryDeg = 125;
+
+  /// Knee angle to exit the bottom zone.
+  /// 8° gap vs entry keeps the user in bottom zone through small jitter
+  /// when they first begin rising out of the squat.
+  static const double _bottomExitDeg = 133;
+
+  // ── landmark sets ──────────────────────────────────────────────────────────
+
+  static const _leftLeg = <PoseLandmarkType>{
     PoseLandmarkType.leftHip,
     PoseLandmarkType.leftKnee,
     PoseLandmarkType.leftAnkle,
   };
 
-  static const _rightLegLandmarks = <PoseLandmarkType>{
+  static const _rightLeg = <PoseLandmarkType>{
     PoseLandmarkType.rightHip,
     PoseLandmarkType.rightKnee,
     PoseLandmarkType.rightAnkle,
   };
+
+  // ── public API ─────────────────────────────────────────────────────────────
 
   @override
   void reset() {
@@ -66,123 +117,8 @@ class SquatCalculator implements ExerciseCalculator {
     _hasReachedBottomInThisRep = false;
     _kneeZone = _KneeZone.mid;
     _lastConfirmedZone = ExerciseRepPhase.unknown;
-    _lockedLegLandmarks = null;
+    _lockedLeg = null;
     _lifecycle.reset();
-  }
-
-  void _resetRepTracking() {
-    _repPhase = ExerciseRepPhase.unknown;
-    _hasReachedBottomInThisRep = false;
-    _kneeZone = _KneeZone.mid;
-    _lastConfirmedZone = ExerciseRepPhase.unknown;
-  }
-
-  bool _hasLegChain(Pose pose, Set<PoseLandmarkType> landmarks) {
-    final chain = _legChainFor(landmarks);
-    return pose.landmarks[chain.hip] != null &&
-        pose.landmarks[chain.knee] != null &&
-        pose.landmarks[chain.ankle] != null;
-  }
-
-  ({PoseLandmarkType hip, PoseLandmarkType knee, PoseLandmarkType ankle})
-      _legChainFor(Set<PoseLandmarkType> landmarks) {
-    if (landmarks.contains(PoseLandmarkType.leftHip)) {
-      return (
-        hip: PoseLandmarkType.leftHip,
-        knee: PoseLandmarkType.leftKnee,
-        ankle: PoseLandmarkType.leftAnkle,
-      );
-    }
-    return (
-      hip: PoseLandmarkType.rightHip,
-      knee: PoseLandmarkType.rightKnee,
-      ankle: PoseLandmarkType.rightAnkle,
-    );
-  }
-
-  Set<PoseLandmarkType>? _selectBestLeg(Pose pose) {
-    final left = _legChainFor(_leftLegLandmarks);
-    final right = _legChainFor(_rightLegLandmarks);
-
-    final lh = pose.landmarks[left.hip];
-    final lk = pose.landmarks[left.knee];
-    final la = pose.landmarks[left.ankle];
-    final rh = pose.landmarks[right.hip];
-    final rk = pose.landmarks[right.knee];
-    final ra = pose.landmarks[right.ankle];
-
-    final hasLeft = lh != null && lk != null && la != null;
-    final hasRight = rh != null && rk != null && ra != null;
-
-    if (!hasLeft && !hasRight) return null;
-    if (hasLeft && !hasRight) return _leftLegLandmarks;
-    if (!hasLeft) return _rightLegLandmarks;
-
-    double seg(PoseLandmark? a, PoseLandmark? b) {
-      if (a == null || b == null) return 0;
-      final dx = a.x - b.x;
-      final dy = a.y - b.y;
-      return math.sqrt(dx * dx + dy * dy);
-    }
-
-    final leftScore = seg(lh, lk) + seg(lk, la);
-    final rightScore = seg(rh, rk) + seg(rk, ra);
-    return leftScore >= rightScore ? _leftLegLandmarks : _rightLegLandmarks;
-  }
-
-  double? _kneeDegFor(Pose pose, Set<PoseLandmarkType> leg) {
-    final chain = _legChainFor(leg);
-    return _poseAngles.angleDegreesFromPose(
-      pose: pose,
-      a: chain.hip,
-      b: chain.knee,
-      c: chain.ankle,
-    );
-  }
-
-  void _updatePhaseAndReps({required double kneeDeg}) {
-    // Zone transitions with hysteresis.
-    switch (_kneeZone) {
-      case _KneeZone.top:
-        if (kneeDeg < _kneeTopExitDeg) _kneeZone = _KneeZone.mid;
-      case _KneeZone.bottom:
-        if (kneeDeg > _kneeBottomExitDeg) _kneeZone = _KneeZone.mid;
-      case _KneeZone.mid:
-        if (kneeDeg >= _kneeTopDeg) {
-          _kneeZone = _KneeZone.top;
-        } else if (kneeDeg <= _kneeBottomDeg) {
-          _kneeZone = _KneeZone.bottom;
-        }
-    }
-
-    // Confirm extreme zones and count reps.
-    switch (_kneeZone) {
-      case _KneeZone.top:
-        _lastConfirmedZone = ExerciseRepPhase.top;
-        _repPhase = ExerciseRepPhase.top;
-        if (_hasReachedBottomInThisRep) {
-          _reps += 1;
-          _hasReachedBottomInThisRep = false;
-        }
-      case _KneeZone.bottom:
-        _lastConfirmedZone = ExerciseRepPhase.bottom;
-        _repPhase = ExerciseRepPhase.bottom;
-        _hasReachedBottomInThisRep = true;
-      case _KneeZone.mid:
-        // Mid-zone direction comes from the last confirmed extreme, not a delta.
-        // bottom → mid = going up = concentric
-        // top → mid   = going down = eccentric
-        switch (_lastConfirmedZone) {
-          case ExerciseRepPhase.bottom:
-            _repPhase = ExerciseRepPhase.concentric;
-          case ExerciseRepPhase.top:
-            _repPhase = ExerciseRepPhase.eccentric;
-          case ExerciseRepPhase.unknown:
-          case ExerciseRepPhase.concentric:
-          case ExerciseRepPhase.eccentric:
-            _repPhase = ExerciseRepPhase.unknown;
-        }
-    }
   }
 
   @override
@@ -192,12 +128,12 @@ class SquatCalculator implements ExerciseCalculator {
     bool startCountdown = false,
     bool startSet = false,
     bool endSet = false,
-    bool autoSetLifecycle = true,
-    bool autoEndSetLifecycle = true,
+    bool autoSetLifecycle = false,
+    bool autoEndSetLifecycle = false,
   }) {
     final metrics = ExerciseFrameMetrics();
-    final bestLegNow = _selectBestLeg(pose);
 
+    // ── Record both knee angles for the debug overlay ──────────────────────
     final leftKneeDeg = _poseAngles.angleDegreesFromPose(
       pose: pose,
       a: PoseLandmarkType.leftHip,
@@ -213,7 +149,7 @@ class SquatCalculator implements ExerciseCalculator {
     if (leftKneeDeg != null) metrics[ExerciseMetric.leftKneeDeg] = leftKneeDeg;
     if (rightKneeDeg != null) metrics[ExerciseMetric.rightKneeDeg] = rightKneeDeg;
 
-    // Lifecycle is driven purely by button signals — pose never interrupts.
+    // ── Advance lifecycle (manual signals only — no auto start/end) ────────
     final lifecycleEvent = _lifecycle.tick(
       isPreparePose: true,
       isBreakPose: false,
@@ -221,43 +157,46 @@ class SquatCalculator implements ExerciseCalculator {
       startCountdownSignal: startCountdown,
       startSignal: startSet,
       endSignal: endSet,
-      autoStart: autoSetLifecycle,
-      autoEnd: autoEndSetLifecycle,
+      autoStart: false,
+      autoEnd: false,
     );
 
+    // ── Set start: lock the best-visible leg and clear phase state ─────────
     if (lifecycleEvent.didStartSet) {
-      _resetRepTracking();
-      _lockedLegLandmarks = bestLegNow;
+      _clearRepState();
+      _lockedLeg = _selectBestLeg(pose);
     }
 
+    // ── Process frame while the set is active ──────────────────────────────
     if (_lifecycle.stage == ExerciseSetStage.active) {
-      // Prefer locked leg while still visible; fall back to best visible leg.
-      final activeLeg = (_lockedLegLandmarks != null &&
-              _hasLegChain(pose, _lockedLegLandmarks!))
-          ? _lockedLegLandmarks
-          : bestLegNow;
+      // Prefer the locked leg; fall back to best visible if it disappears.
+      final activeLeg = (_lockedLeg != null && _legIsVisible(pose, _lockedLeg!))
+          ? _lockedLeg
+          : _selectBestLeg(pose);
 
-      // Lock lazily if set started before any leg was visible.
-      if (_lockedLegLandmarks == null && activeLeg != null) {
-        _lockedLegLandmarks = activeLeg;
+      // Lazily lock if the set started before any leg was visible.
+      if (_lockedLeg == null && activeLeg != null) {
+        _lockedLeg = activeLeg;
       }
 
-      final activeKneeDeg = activeLeg == null ? null : _kneeDegFor(pose, activeLeg);
+      final kneeDeg = activeLeg == null ? null : _kneeDeg(pose, activeLeg);
 
-      // When landmarks are missing, skip this frame — state is preserved.
-      if (activeKneeDeg != null) {
-        _updatePhaseAndReps(kneeDeg: activeKneeDeg);
+      // Skip the frame when landmarks are missing; state is preserved.
+      if (kneeDeg != null) {
+        _updatePhaseAndReps(kneeDeg: kneeDeg);
       }
     }
 
+    // ── Set end: clear phase state and release the leg lock ───────────────
     if (lifecycleEvent.didEndSet) {
-      _resetRepTracking();
-      _lockedLegLandmarks = null;
+      _clearRepState();
+      _lockedLeg = null;
     }
 
     return ExerciseFrameResult(
       reps: _reps,
       setStage: _lifecycle.stage,
+      // Phase is only meaningful while the set is active.
       repPhase: _lifecycle.stage == ExerciseSetStage.active
           ? _repPhase
           : ExerciseRepPhase.unknown,
@@ -270,5 +209,146 @@ class SquatCalculator implements ExerciseCalculator {
           ? _lifecycle.countdownRemainingMsAt(timestamp)
           : null,
     );
+  }
+
+  // ── private helpers ────────────────────────────────────────────────────────
+
+  /// Resets phase/rep-tracking state between sets.
+  /// [_reps] is intentionally NOT reset here — reps accumulate across sets
+  /// until [reset] is called explicitly.
+  void _clearRepState() {
+    _repPhase = ExerciseRepPhase.unknown;
+    _hasReachedBottomInThisRep = false;
+    _kneeZone = _KneeZone.mid;
+    _lastConfirmedZone = ExerciseRepPhase.unknown;
+  }
+
+  /// Returns true when all three landmarks for [leg] are present in [pose].
+  bool _legIsVisible(Pose pose, Set<PoseLandmarkType> leg) {
+    final c = _chainFor(leg);
+    return pose.landmarks[c.hip] != null &&
+        pose.landmarks[c.knee] != null &&
+        pose.landmarks[c.ankle] != null;
+  }
+
+  /// Picks the leg whose hip→knee + knee→ankle total segment length is greater.
+  /// A longer projected chain means that leg is more side-on to the camera,
+  /// giving a more reliable knee angle reading.
+  /// Returns null when neither leg has all three landmarks visible.
+  Set<PoseLandmarkType>? _selectBestLeg(Pose pose) {
+    final lc = _chainFor(_leftLeg);
+    final rc = _chainFor(_rightLeg);
+
+    final lh = pose.landmarks[lc.hip];
+    final lk = pose.landmarks[lc.knee];
+    final la = pose.landmarks[lc.ankle];
+    final rh = pose.landmarks[rc.hip];
+    final rk = pose.landmarks[rc.knee];
+    final ra = pose.landmarks[rc.ankle];
+
+    final hasLeft  = lh != null && lk != null && la != null;
+    final hasRight = rh != null && rk != null && ra != null;
+
+    if (!hasLeft && !hasRight) return null;
+    if (hasLeft && !hasRight)  return _leftLeg;
+    if (!hasLeft)              return _rightLeg;
+
+    // Both legs visible — pick the one with the longer projected chain.
+    final leftScore  = _segLen(lh, lk) + _segLen(lk, la);
+    final rightScore = _segLen(rh, rk) + _segLen(rk, ra);
+    return leftScore >= rightScore ? _leftLeg : _rightLeg;
+  }
+
+  /// Returns the hip–knee–ankle angle in degrees for [leg], or null if any
+  /// landmark is missing.
+  double? _kneeDeg(Pose pose, Set<PoseLandmarkType> leg) {
+    final c = _chainFor(leg);
+    return _poseAngles.angleDegreesFromPose(
+      pose: pose,
+      a: c.hip,
+      b: c.knee,
+      c: c.ankle,
+    );
+  }
+
+  /// Maps a landmark set to its hip / knee / ankle landmark types.
+  ({PoseLandmarkType hip, PoseLandmarkType knee, PoseLandmarkType ankle})
+      _chainFor(Set<PoseLandmarkType> leg) {
+    if (leg.contains(PoseLandmarkType.leftHip)) {
+      return (
+        hip: PoseLandmarkType.leftHip,
+        knee: PoseLandmarkType.leftKnee,
+        ankle: PoseLandmarkType.leftAnkle,
+      );
+    }
+    return (
+      hip: PoseLandmarkType.rightHip,
+      knee: PoseLandmarkType.rightKnee,
+      ankle: PoseLandmarkType.rightAnkle,
+    );
+  }
+
+  /// Euclidean distance between two landmarks in normalised screen space.
+  double _segLen(PoseLandmark? a, PoseLandmark? b) {
+    if (a == null || b == null) return 0;
+    final dx = a.x - b.x;
+    final dy = a.y - b.y;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+  /// Advances the knee zone state machine and updates phase / rep count.
+  void _updatePhaseAndReps({required double kneeDeg}) {
+    // ── Step 1: Advance the zone with hysteresis ───────────────────────────
+    // Exit thresholds are tighter than entry thresholds so an angle sitting
+    // at a zone boundary doesn't flip between zones on every frame.
+    switch (_kneeZone) {
+      case _KneeZone.top:
+        if (kneeDeg < _topExitDeg) _kneeZone = _KneeZone.mid;
+      case _KneeZone.bottom:
+        if (kneeDeg > _bottomExitDeg) _kneeZone = _KneeZone.mid;
+      case _KneeZone.mid:
+        if (kneeDeg >= _topEntryDeg) {
+          _kneeZone = _KneeZone.top;
+        } else if (kneeDeg <= _bottomEntryDeg) {
+          _kneeZone = _KneeZone.bottom;
+        }
+    }
+
+    // ── Step 2: Map zone to phase and handle rep counting ──────────────────
+    switch (_kneeZone) {
+      case _KneeZone.top:
+        // User is standing. Confirm the extreme and count the rep if they
+        // previously reached the bottom zone in this rep.
+        _lastConfirmedZone = ExerciseRepPhase.top;
+        _repPhase = ExerciseRepPhase.top;
+        if (_hasReachedBottomInThisRep) {
+          _reps += 1;
+          _hasReachedBottomInThisRep = false;
+        }
+
+      case _KneeZone.bottom:
+        // User is at squat depth. Confirm the extreme and arm the rep counter.
+        _lastConfirmedZone = ExerciseRepPhase.bottom;
+        _repPhase = ExerciseRepPhase.bottom;
+        _hasReachedBottomInThisRep = true;
+
+      case _KneeZone.mid:
+        // User is between standing and squat depth.
+        // Derive movement direction from the last confirmed extreme zone
+        // rather than comparing angles frame-to-frame (which is noisy).
+        //   bottom → mid = rising back up = concentric
+        //   top    → mid = descending     = eccentric
+        switch (_lastConfirmedZone) {
+          case ExerciseRepPhase.bottom:
+            _repPhase = ExerciseRepPhase.concentric;
+          case ExerciseRepPhase.top:
+            _repPhase = ExerciseRepPhase.eccentric;
+          case ExerciseRepPhase.unknown:
+          case ExerciseRepPhase.concentric:
+          case ExerciseRepPhase.eccentric:
+            // Set just started and no extreme has been confirmed yet.
+            _repPhase = ExerciseRepPhase.unknown;
+        }
+    }
   }
 }

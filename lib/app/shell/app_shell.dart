@@ -19,13 +19,7 @@ class AppShell extends StatelessWidget {
   }
 
   String get _title {
-    switch (_currentIndex) {
-      case 1:
-        return 'Workout Log';
-      case 0:
-      default:
-        return 'Workout';
-    }
+    return 'LIVE WORKOUT';
   }
 
   void _onTap(BuildContext context, int index) {
@@ -44,7 +38,15 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title),
+        centerTitle: false,
+        title: Text(
+          _title,
+          textAlign: TextAlign.left,
+          style: const TextStyle(
+            fontSize: 40,
+            letterSpacing: 1.5,
+          ),
+        ),
       ),
       body: child,
       bottomNavigationBar: BottomNavigationBar(

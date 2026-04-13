@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 import 'app_text_styles.dart';
@@ -52,11 +53,19 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.bgPrimary,
       textTheme: AppTextStyles.textTheme,
 
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.bgPrimary,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle(
+        centerTitle: false,
+        // Large Space Mono title — shared by all app bar screens.
+        titleTextStyle: GoogleFonts.spaceMono(
+          fontSize: 40,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.5,
+          color: AppColors.textPrimary,
+        ),
+        systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
           systemNavigationBarColor: AppColors.bgPrimary,
