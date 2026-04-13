@@ -100,6 +100,12 @@ app/
 - shell/
   AppShell scaffold (AppBar + bottom navigation).
 
+- theme/
+  Global design system tokens and theme assembly.
+  - `app_colors.dart` — Monochrome color palette (white/grey/black scale + camera overlay variants).
+  - `app_text_styles.dart` — Full Material `TextTheme` using Space Mono (Regular 400 / Bold 700).
+  - `app_theme.dart` — Assembled `ThemeData` (Material 3, monochrome ColorScheme, all widget themes).
+
 features/
 
 - onboarding/
@@ -281,6 +287,26 @@ Break pose is calculator-specific. Current strategies:
 These exercises validate the system.
 
 Additional exercises can be added later.
+
+---
+
+# Design System
+
+The app uses a monochrome Swiss-grid / terminal-poster aesthetic.
+
+**Color palette** (`AppColors`):
+- Background scale: `bgPrimary` (white) → `bgSurface` → `bgElevated` (light grey)
+- Border scale: `borderSubtle` → `borderStrong`
+- Text scale: `textPrimary` (near-black) → `textSecondary` → `textDisabled`
+- Camera overlays: `bgOverlay55` / `bgOverlay80` (white at 55%/80% opacity)
+
+**Typography** (`AppTextStyles`):
+- All text uses Space Mono (via `google_fonts`), Regular 400 or Bold 700 only.
+- Applied via `AppTextStyles.textTheme` which is wired into `ThemeData.textTheme`.
+
+**Theme entry point**: `AppTheme.light` in `lib/app/theme/app_theme.dart`.
+
+All widgets should consume colors via `AppColors.*` constants and text styles via `Theme.of(context).textTheme.*`. Avoid inline `Colors.*` literals.
 
 ---
 

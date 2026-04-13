@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
+
 class PoseLandmarksOverlay extends StatelessWidget {
   const PoseLandmarksOverlay({
     required this.pose,
@@ -28,7 +29,7 @@ class PoseLandmarksOverlay extends StatelessWidget {
           pose: pose,
           sourceSize: sourceSize,
           mirrorHorizontally: mirrorHorizontally,
-          color: Theme.of(context).colorScheme.primary,
+          color: Colors.white,
         ),
       ),
     );
@@ -88,18 +89,18 @@ class _PoseLandmarksPainter extends CustomPainter {
 
     final dotPaint = Paint()
       ..style = PaintingStyle.fill
-      ..color = color.withOpacity(0.95);
+      ..color = color.withValues(alpha: 0.95);
 
     final outlinePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..color = Colors.white.withOpacity(0.35);
+      ..color = Colors.black.withValues(alpha: 0.4);
 
     final linePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 2
-      ..color = color.withOpacity(0.55);
+      ..color = color.withValues(alpha: 0.55);
 
     final sx = size.width / sourceSize.width;
     final sy = size.height / sourceSize.height;

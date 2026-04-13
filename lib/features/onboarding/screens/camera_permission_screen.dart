@@ -1,7 +1,7 @@
-// lib/features/onboarding/screens/camera_permission_screen.dart
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../services/permission_service.dart';
 
 class CameraPermissionScreen extends StatefulWidget {
@@ -90,23 +90,13 @@ class _CameraPermissionScreenState extends State<CameraPermissionScreen>
           // Hero banner
           Container(
             height: 220,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDenied
-                    ? [
-                        const Color(0xFFFF6347).withValues(alpha: 0.3),
-                        Colors.black,
-                      ]
-                    : [
-                        const Color(0xFF6C63FF).withValues(alpha: 0.3),
-                        Colors.black,
-                      ],
-              ),
-            ),
+            color: isDenied ? AppColors.bgElevated : AppColors.bgSurface,
             child: const Center(
-              child: Icon(Icons.camera_alt, size: 72, color: Colors.white70),
+              child: Icon(
+                Icons.camera_alt,
+                size: 72,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
 
@@ -118,32 +108,28 @@ class _CameraPermissionScreenState extends State<CameraPermissionScreen>
                 children: [
                   Text(
                     'Before you begin',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
                   if (isDenied) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF6347).withValues(alpha: 0.1),
-                        border: Border.all(
-                          color: const Color(0xFFFF6347).withValues(alpha: 0.4),
-                        ),
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.bgElevated,
+                        border: Border.all(color: AppColors.borderStrong),
                       ),
-                      child: const Text(
+                      child: Text(
                         "Camera access is denied. Live workout tracking won't be available without it.",
-                        style: TextStyle(color: Color(0xFFFF9580)),
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
                     const SizedBox(height: 16),
                   ] else ...[
-                    const Text(
+                    Text(
                       'This app uses your camera to track workouts in real time.',
-                      style: TextStyle(color: Colors.black),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -213,25 +199,23 @@ class _FeatureRow extends StatelessWidget {
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: dimmed
-                ? const Color(0xFFFF6347).withValues(alpha: 0.15)
-                : const Color(0xFF6C63FF).withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(6),
+            color: AppColors.bgElevated,
+            border: Border.all(color: AppColors.borderStrong),
           ),
           child: Icon(
             dimmed ? Icons.close : Icons.check,
             size: 14,
-            color: dimmed ? const Color(0xFFFF6347) : const Color(0xFF6C63FF),
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(width: 10),
         Text(
           label,
-          style: TextStyle(
-            color: dimmed ? Colors.black : Colors.grey,
-            decoration: dimmed ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.black,
-          ),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: dimmed ? AppColors.textDisabled : AppColors.textPrimary,
+                decoration: dimmed ? TextDecoration.lineThrough : null,
+                decorationColor: AppColors.textDisabled,
+              ),
         ),
       ],
     );

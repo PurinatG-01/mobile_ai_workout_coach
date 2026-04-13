@@ -11,6 +11,7 @@
 - App entrypoints: `lib/main.dart` (bootstrap) and `lib/app/app.dart` (MaterialApp.router)
 - Router: `lib/app/router.dart`
 - Navigation shell: `lib/app/shell/app_shell.dart`
+- Design system (theme): `lib/app/theme/` (`AppColors`, `AppTextStyles`, `AppTheme`)
 
 ## Navigation
 

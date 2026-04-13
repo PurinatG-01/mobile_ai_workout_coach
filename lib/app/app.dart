@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'router.dart';
+import 'theme/app_theme.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -9,10 +10,8 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'AI Workout Coach',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
+      themeMode: ThemeMode.light,
       routerConfig: appRouter,
     );
   }

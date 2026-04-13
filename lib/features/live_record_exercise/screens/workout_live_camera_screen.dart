@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../../../common/models/exercise_type.dart';
 import '../../../domain/exercises/exercise_calculator.dart';
 import '../../../domain/exercises/exercise_calculator_factory.dart';
@@ -72,8 +73,9 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
         : (countdownMs / 1000.0).ceil().clamp(0, 999);
 
     final repsText = latestResult?.reps.toString() ?? '0';
-    final exerciseStageText =
-        latestResult == null ? '—' : _formatRepPhase(latestResult.repPhase);
+    final exerciseStageText = latestResult == null
+        ? '—'
+        : _formatRepPhase(latestResult.repPhase);
     final setStageText =
         latestResult == null ? '—' : _formatSetStage(latestResult.setStage);
 
@@ -288,7 +290,7 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
   String _formatRepPhase(ExerciseRepPhase phase) {
     switch (phase) {
       case ExerciseRepPhase.unknown:
-        return 'Unknown';
+        return '—';
       case ExerciseRepPhase.top:
         return 'Top';
       case ExerciseRepPhase.bottom:
@@ -299,6 +301,7 @@ class _WorkoutLiveCameraScreenState extends State<WorkoutLiveCameraScreen> {
         return 'Eccentric';
     }
   }
+
 }
 
 class _CountdownOverlay extends StatelessWidget {
@@ -310,22 +313,17 @@ class _CountdownOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest.withOpacity(0.55),
-          borderRadius: BorderRadius.circular(20),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+        decoration: const BoxDecoration(
+          color: AppColors.bgOverlay80,
+          border: Border.fromBorderSide(BorderSide(color: AppColors.borderStrong)),
         ),
         child: Text(
           '$seconds',
-          style: theme.textTheme.displayLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(context).textTheme.displayLarge,
         ),
       ),
     );
@@ -345,21 +343,18 @@ class _MlKitDebugBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     final lastText = lastPoseAt == null
         ? '—'
         : '${lastPoseAt!.hour.toString().padLeft(2, '0')}:${lastPoseAt!.minute.toString().padLeft(2, '0')}:${lastPoseAt!.second.toString().padLeft(2, '0')}';
 
     return Material(
-      color: colorScheme.surfaceContainerHighest.withOpacity(0.70),
+      color: AppColors.bgOverlay80,
       shape: const StadiumBorder(),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Text(
           'Pose: $poseCount | Landmarks: $landmarkCount | Last: $lastText',
-          style: theme.textTheme.labelMedium,
+          style: Theme.of(context).textTheme.labelMedium,
         ),
       ),
     );
