@@ -3,266 +3,296 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/calculators/squat_calculator.dart';
+import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_metric.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_rep_phase.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_set_stage.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/set_lifecycle_controller.dart';
 
-PoseLandmark _lm(PoseLandmarkType type, double x, double y) {
-  return PoseLandmark(
-    type: type,
-    x: x,
-    y: y,
-    z: 0,
-    likelihood: 1,
-  );
-}
+// ── Pose builders ─────────────────────────────────────────────────────────────
 
-/// Builds a pose that contains ONLY the left hip/knee/ankle chain.
-///
-/// Geometry: knee is at origin, hip at (1, 0), ankle at (cos(theta), sin(theta)).
-/// This yields the requested knee angle in a deterministic way.
-Pose _poseLeftKneeAngleDeg(double deg) {
-  final theta = deg * math.pi / 180.0;
+PoseLandmark _lm(PoseLandmarkType type, double x, double y) =>
+    PoseLandmark(type: type, x: x, y: y, z: 0, likelihood: 1);
+
+/// Left leg only. Knee at origin, hip at (scale, 0), ankle at the angle.
+/// Gives knee angle = deg. Scale controls the segment-length visibility score.
+Pose _poseLeft(double deg, {double scale = 1.0}) {
+  final rad = deg * math.pi / 180;
   return Pose(landmarks: {
+    PoseLandmarkType.leftHip: _lm(PoseLandmarkType.leftHip, scale, 0),
     PoseLandmarkType.leftKnee: _lm(PoseLandmarkType.leftKnee, 0, 0),
-    PoseLandmarkType.leftHip: _lm(PoseLandmarkType.leftHip, 1, 0),
-    PoseLandmarkType.leftAnkle:
-        _lm(PoseLandmarkType.leftAnkle, math.cos(theta), math.sin(theta)),
-  });
-}
-
-/// Builds a pose with BOTH legs present.
-///
-/// `leftScale/rightScale` controls the apparent segment length, which impacts
-/// the calculator's "best visible leg" selection score.
-Pose _poseBothLegs({
-  required double leftDeg,
-  required double leftScale,
-  required double rightDeg,
-  required double rightScale,
-}) {
-  // Each leg uses a scaled construction:
-  // knee at base position, hip at (L,0), ankle at (L*cos(theta), L*sin(theta)).
-  // This gives knee angle = deg and a visibility score proportional to L.
-  final leftTheta = leftDeg * math.pi / 180.0;
-  final rightTheta = rightDeg * math.pi / 180.0;
-
-  const leftKneeX = 0.0;
-  const leftKneeY = 0.0;
-  const rightKneeX = 10.0;
-  const rightKneeY = 0.0;
-
-  return Pose(landmarks: {
-    PoseLandmarkType.leftKnee:
-        _lm(PoseLandmarkType.leftKnee, leftKneeX, leftKneeY),
-    PoseLandmarkType.leftHip:
-        _lm(PoseLandmarkType.leftHip, leftKneeX + leftScale, leftKneeY),
     PoseLandmarkType.leftAnkle: _lm(
-      PoseLandmarkType.leftAnkle,
-      leftKneeX + leftScale * math.cos(leftTheta),
-      leftKneeY + leftScale * math.sin(leftTheta),
-    ),
-    PoseLandmarkType.rightKnee:
-        _lm(PoseLandmarkType.rightKnee, rightKneeX, rightKneeY),
-    PoseLandmarkType.rightHip:
-        _lm(PoseLandmarkType.rightHip, rightKneeX + rightScale, rightKneeY),
-    PoseLandmarkType.rightAnkle: _lm(
-      PoseLandmarkType.rightAnkle,
-      rightKneeX + rightScale * math.cos(rightTheta),
-      rightKneeY + rightScale * math.sin(rightTheta),
-    ),
+        PoseLandmarkType.leftAnkle, scale * math.cos(rad), scale * math.sin(rad)),
   });
 }
 
-/// Builds a pose that contains ONLY the right hip/knee/ankle chain.
-Pose _poseRightOnly({required double rightDeg, required double rightScale}) {
-  final rightTheta = rightDeg * math.pi / 180.0;
-  const rightKneeX = 10.0;
-  const rightKneeY = 0.0;
+/// Both legs. Scale controls which leg is selected as "best visible".
+Pose _poseBothLegs(
+    double leftDeg, double leftScale, double rightDeg, double rightScale) {
+  final lRad = leftDeg * math.pi / 180;
+  final rRad = rightDeg * math.pi / 180;
+  const rOff = 10.0;
   return Pose(landmarks: {
-    PoseLandmarkType.rightKnee:
-        _lm(PoseLandmarkType.rightKnee, rightKneeX, rightKneeY),
+    PoseLandmarkType.leftHip: _lm(PoseLandmarkType.leftHip, leftScale, 0),
+    PoseLandmarkType.leftKnee: _lm(PoseLandmarkType.leftKnee, 0, 0),
+    PoseLandmarkType.leftAnkle: _lm(PoseLandmarkType.leftAnkle,
+        leftScale * math.cos(lRad), leftScale * math.sin(lRad)),
     PoseLandmarkType.rightHip:
-        _lm(PoseLandmarkType.rightHip, rightKneeX + rightScale, rightKneeY),
-    PoseLandmarkType.rightAnkle: _lm(
-      PoseLandmarkType.rightAnkle,
-      rightKneeX + rightScale * math.cos(rightTheta),
-      rightKneeY + rightScale * math.sin(rightTheta),
-    ),
+        _lm(PoseLandmarkType.rightHip, rOff + rightScale, 0),
+    PoseLandmarkType.rightKnee: _lm(PoseLandmarkType.rightKnee, rOff, 0),
+    PoseLandmarkType.rightAnkle: _lm(PoseLandmarkType.rightAnkle,
+        rOff + rightScale * math.cos(rRad), rightScale * math.sin(rRad)),
   });
 }
+
+/// Right leg only, offset so it doesn't overlap the left leg origin.
+Pose _poseRight(double deg, {double scale = 1.0}) {
+  final rad = deg * math.pi / 180;
+  const rOff = 10.0;
+  return Pose(landmarks: {
+    PoseLandmarkType.rightHip:
+        _lm(PoseLandmarkType.rightHip, rOff + scale, 0),
+    PoseLandmarkType.rightKnee: _lm(PoseLandmarkType.rightKnee, rOff, 0),
+    PoseLandmarkType.rightAnkle: _lm(PoseLandmarkType.rightAnkle,
+        rOff + scale * math.cos(rad), scale * math.sin(rad)),
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+SetLifecycleController _lifecycle() => SetLifecycleController(
+      countdownDuration: Duration.zero,
+      endSetGraceDuration: Duration.zero,
+    );
+
+SquatCalculator _calc() => SquatCalculator(lifecycle: _lifecycle());
+
+final _t = DateTime(2026, 1, 1);
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  test('SquatCalculator counts 1 rep for top -> bottom -> top', () {
-    final lifecycle = SetLifecycleController(
-      countdownDuration: Duration.zero,
-      endSetGraceDuration: const Duration(seconds: 1),
-    );
-    final calc = SquatCalculator(lifecycle: lifecycle);
-    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+  // Thresholds (from SquatCalculator):
+  //   top    entry=160°  exit=150°
+  //   bottom entry=125°  exit=133°
+  //
+  // Zone transitions require 2 frames: one exits the current zone → mid,
+  // the next enters the new zone. Angle guide:
+  //   top=170°  mid=145°  bottom=118°
 
-    // Standing (prepare) => countdown.
-    final r0 = calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0)!;
-    expect(r0.setStage, ExerciseSetStage.countdown);
+  group('rep counting', () {
+    test('top → bottom → top counts 1 rep', () {
+      final calc = _calc();
 
-    // Next tick completes countdown => active.
-    final r1 = calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0)!;
-    expect(r1.setStage, ExerciseSetStage.active);
-    expect(r1.repPhase, ExerciseRepPhase.top);
-    expect(r1.reps, 0);
+      final r0 =
+          calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true)!;
+      expect(r0.setStage, ExerciseSetStage.active);
+      expect(r0.repPhase, ExerciseRepPhase.top);
+      expect(r0.reps, 0);
 
-    // Go down (eccentric) to bottom.
-    final r2 = calc.update(pose: _poseLeftKneeAngleDeg(150), timestamp: t0)!;
-    expect(r2.setStage, ExerciseSetStage.active);
-    expect(r2.repPhase, ExerciseRepPhase.eccentric);
-    expect(r2.reps, 0);
+      calc.update(pose: _poseLeft(145), timestamp: _t); // top → mid (eccentric)
+      calc.update(pose: _poseLeft(118), timestamp: _t); // mid → bottom
+      calc.update(pose: _poseLeft(145), timestamp: _t); // bottom → mid (concentric)
+      final r = calc.update(pose: _poseLeft(170), timestamp: _t)!; // mid → top
+      expect(r.repPhase, ExerciseRepPhase.top);
+      expect(r.reps, 1);
 
-    final r3 = calc.update(pose: _poseLeftKneeAngleDeg(118), timestamp: t0)!;
-    expect(r3.repPhase, ExerciseRepPhase.bottom);
-    expect(r3.reps, 0);
+      // Holding top must not double-count.
+      expect(calc.update(pose: _poseLeft(175), timestamp: _t)!.reps, 1);
+    });
 
-    // Stand up (concentric) and count when reaching top.
-    final r4 = calc.update(pose: _poseLeftKneeAngleDeg(150), timestamp: t0)!;
-    expect(r4.repPhase, ExerciseRepPhase.concentric);
-    expect(r4.reps, 0);
+    test('partial descent without reaching bottom counts 0 reps', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
 
-    final r5 = calc.update(pose: _poseLeftKneeAngleDeg(170), timestamp: t0)!;
-    expect(r5.repPhase, ExerciseRepPhase.top);
-    expect(r5.reps, 1);
+      // Mid zone (145°) but never hits ≤ 125° (bottom entry threshold).
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      final r = calc.update(pose: _poseLeft(170), timestamp: _t)!;
+      expect(r.reps, 0);
+    });
 
-    // Staying at top should not double-count.
-    final r6 = calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0)!;
-    expect(r6.repPhase, ExerciseRepPhase.top);
-    expect(r6.reps, 1);
+    test('3 reps count correctly', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
+
+      for (var i = 0; i < 3; i++) {
+        calc.update(pose: _poseLeft(145), timestamp: _t); // top → mid
+        calc.update(pose: _poseLeft(118), timestamp: _t); // mid → bottom
+        calc.update(pose: _poseLeft(145), timestamp: _t); // bottom → mid
+        calc.update(pose: _poseLeft(170), timestamp: _t); // mid → top → rep+1
+      }
+      expect(calc.update(pose: _poseLeft(175), timestamp: _t)!.reps, 3);
+    });
   });
 
-  test('SquatCalculator does not count without reaching bottom', () {
-    final lifecycle = SetLifecycleController(
-      countdownDuration: Duration.zero,
-      endSetGraceDuration: const Duration(seconds: 1),
-    );
-    final calc = SquatCalculator(lifecycle: lifecycle);
-    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+  group('phase detection', () {
+    test('repPhase is unknown when set is not active', () {
+      final r = _calc().update(pose: _poseLeft(170), timestamp: _t)!;
+      expect(r.setStage, ExerciseSetStage.rest);
+      expect(r.repPhase, ExerciseRepPhase.unknown);
+    });
 
-    calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0);
-    calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0);
+    test('repPhase is unknown before any zone extreme is confirmed', () {
+      final calc = _calc();
+      // Start at mid angle — neither top nor bottom zone entered yet.
+      final r =
+          calc.update(pose: _poseLeft(145), timestamp: _t, startSet: true)!;
+      expect(r.repPhase, ExerciseRepPhase.unknown);
+    });
 
-    // Partial squat (never hits <= 120).
-    calc.update(pose: _poseLeftKneeAngleDeg(135), timestamp: t0);
-    final r = calc.update(pose: _poseLeftKneeAngleDeg(170), timestamp: t0)!;
-    expect(r.setStage, ExerciseSetStage.active);
-    expect(r.reps, 0);
+    test('mid zone after bottom confirmed is concentric', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(145), timestamp: _t); // top → mid
+      calc.update(pose: _poseLeft(118), timestamp: _t); // mid → bottom
+      final r = calc.update(pose: _poseLeft(145), timestamp: _t)!; // bottom → mid
+      expect(r.repPhase, ExerciseRepPhase.concentric);
+    });
+
+    test('mid zone after top confirmed is eccentric', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true); // top
+      final r = calc.update(pose: _poseLeft(145), timestamp: _t)!; // top → mid
+      expect(r.repPhase, ExerciseRepPhase.eccentric);
+    });
   });
 
-  test('SquatCalculator hysteresis keeps top until < 160', () {
-    final lifecycle = SetLifecycleController(
-      countdownDuration: Duration.zero,
-      endSetGraceDuration: const Duration(seconds: 1),
-    );
-    final calc = SquatCalculator(lifecycle: lifecycle);
-    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+  group('hysteresis', () {
+    test('stays in top zone until knee drops below exit threshold (150°)', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
 
-    calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0);
-    calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0);
+      // 155° is above topExitDeg=150 → still in top.
+      expect(
+        calc.update(pose: _poseLeft(155), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.top,
+      );
+      // 148° drops below topExitDeg=150 → exits to mid.
+      expect(
+        calc.update(pose: _poseLeft(148), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.eccentric,
+      );
+    });
 
-    final r1 = calc.update(pose: _poseLeftKneeAngleDeg(163), timestamp: t0)!;
-    expect(r1.repPhase, ExerciseRepPhase.top);
+    test('stays in bottom zone until knee rises above exit threshold (133°)',
+        () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      calc.update(pose: _poseLeft(118), timestamp: _t); // in bottom
 
-    final r2 = calc.update(pose: _poseLeftKneeAngleDeg(159), timestamp: t0)!;
-    expect(r2.repPhase, ExerciseRepPhase.eccentric);
+      // 130° is below bottomExitDeg=133 → still in bottom.
+      expect(
+        calc.update(pose: _poseLeft(130), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.bottom,
+      );
+      // 135° rises above bottomExitDeg=133 → exits to mid.
+      expect(
+        calc.update(pose: _poseLeft(135), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.concentric,
+      );
+    });
   });
 
-  test('SquatCalculator keeps phase stable under jitter and allows reversal',
-      () {
-    final lifecycle = SetLifecycleController(
-      countdownDuration: Duration.zero,
-      endSetGraceDuration: const Duration(seconds: 1),
-    );
-    final calc = SquatCalculator(lifecycle: lifecycle);
-    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+  group('missing landmarks', () {
+    test('frame with no leg landmarks is skipped; state is preserved', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
 
-    // Start set.
-    calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0);
-    calc.update(pose: _poseLeftKneeAngleDeg(175), timestamp: t0);
-
-    // Go down: eccentric.
-    final r1 = calc.update(pose: _poseLeftKneeAngleDeg(150), timestamp: t0)!;
-    expect(r1.repPhase, ExerciseRepPhase.eccentric);
-
-    // Small jitter upward (< 2 deg deadband) should not flip phase.
-    final r2 = calc.update(pose: _poseLeftKneeAngleDeg(151), timestamp: t0)!;
-    expect(r2.repPhase, ExerciseRepPhase.eccentric);
-
-    // A clear reversal upward should switch to concentric even without bottom.
-    final r3 = calc.update(pose: _poseLeftKneeAngleDeg(156), timestamp: t0)!;
-    expect(r3.repPhase, ExerciseRepPhase.concentric);
+      // Empty pose — no landmarks at all.
+      final r = calc.update(pose: Pose(landmarks: {}), timestamp: _t)!;
+      expect(r.setStage, ExerciseSetStage.active);
+      expect(r.repPhase, ExerciseRepPhase.top); // state unchanged
+      expect(r.reps, 0);
+    });
   });
 
-  test('SquatCalculator locks selected leg during active set', () {
-    final lifecycle = SetLifecycleController(
-      countdownDuration: Duration.zero,
-      endSetGraceDuration: const Duration(seconds: 1),
-    );
-    final calc = SquatCalculator(lifecycle: lifecycle);
-    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+  group('leg locking', () {
+    test('locks best leg at set start and ignores score flip mid-set', () {
+      final calc = _calc();
+      // Left leg (scale=2) is best and at top; right leg (scale=1) is at bottom.
+      final start = _poseBothLegs(170, 2.0, 118, 1.0);
+      final r0 = calc.update(pose: start, timestamp: _t, startSet: true)!;
+      expect(r0.repPhase, ExerciseRepPhase.top); // left leg used
 
-    // Make LEFT be best leg at set start (bigger scale), and LEFT is top.
-    // RIGHT is bottom. If selection flips to right, repPhase would become bottom.
-    final startPose = _poseBothLegs(
-      leftDeg: 175,
-      leftScale: 2.0,
-      rightDeg: 110,
-      rightScale: 1.0,
-    );
+      // Flip scores: right now has scale=2 but is at bottom angle.
+      // Without locking, phase would switch to bottom.
+      final flipped = _poseBothLegs(170, 1.0, 118, 2.0);
+      expect(
+        calc.update(pose: flipped, timestamp: _t)!.repPhase,
+        ExerciseRepPhase.top, // still locked to left
+      );
+    });
 
-    calc.update(pose: startPose, timestamp: t0);
-    final active0 = calc.update(pose: startPose, timestamp: t0)!;
-    expect(active0.setStage, ExerciseSetStage.active);
-    expect(active0.repPhase, ExerciseRepPhase.top);
+    test('falls back to visible leg when locked leg disappears', () {
+      final calc = _calc();
+      calc.update(
+          pose: _poseBothLegs(170, 2.0, 118, 1.0),
+          timestamp: _t,
+          startSet: true);
 
-    // Now swap visibility scores so RIGHT would become "best" if not locked.
-    final flippedBestPose = _poseBothLegs(
-      leftDeg: 175,
-      leftScale: 1.0,
-      rightDeg: 110,
-      rightScale: 2.0,
-    );
-
-    final r1 = calc.update(pose: flippedBestPose, timestamp: t0)!;
-    expect(r1.setStage, ExerciseSetStage.active);
-    // Still top => locked to left.
-    expect(r1.repPhase, ExerciseRepPhase.top);
+      // Left leg disappears; only right leg (118° = bottom angle) remains.
+      calc.update(pose: _poseRight(118), timestamp: _t); // exits top → mid
+      final r = calc.update(pose: _poseRight(118), timestamp: _t)!; // mid → bottom
+      expect(r.repPhase, ExerciseRepPhase.bottom);
+    });
   });
 
-  test('SquatCalculator switches leg if locked leg disappears', () {
-    final lifecycle = SetLifecycleController(
-      countdownDuration: Duration.zero,
-      endSetGraceDuration: const Duration(seconds: 1),
-    );
-    final calc = SquatCalculator(lifecycle: lifecycle);
-    final t0 = DateTime(2026, 1, 1, 0, 0, 0);
+  group('metrics', () {
+    test('emits leftKneeDeg and rightKneeDeg when both legs present', () {
+      final r = _calc().update(
+        pose: _poseBothLegs(170, 1.0, 165, 1.0),
+        timestamp: _t,
+        startSet: true,
+      )!;
+      expect(r.metrics[ExerciseMetric.leftKneeDeg], isNotNull);
+      expect(r.metrics[ExerciseMetric.rightKneeDeg], isNotNull);
+    });
 
-    final startPose = _poseBothLegs(
-      leftDeg: 175,
-      leftScale: 2.0,
-      rightDeg: 110,
-      rightScale: 1.0,
-    );
+    test('emits only leftKneeDeg when only left leg is visible', () {
+      final r = _calc()
+          .update(pose: _poseLeft(170), timestamp: _t, startSet: true)!;
+      expect(r.metrics[ExerciseMetric.leftKneeDeg], isNotNull);
+      expect(r.metrics[ExerciseMetric.rightKneeDeg], isNull);
+    });
+  });
 
-    calc.update(pose: startPose, timestamp: t0);
-    calc.update(pose: startPose, timestamp: t0);
+  group('lifecycle', () {
+    test('endSet transitions to rest and clears phase', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      calc.update(pose: _poseLeft(118), timestamp: _t); // in bottom
 
-    // Only RIGHT leg remains visible => should switch and show bottom.
-    final rightOnly = _poseRightOnly(rightDeg: 110, rightScale: 2.0);
-    final r1 = calc.update(pose: rightOnly, timestamp: t0)!;
-    expect(r1.setStage, ExerciseSetStage.active);
-    // Because the prior locked leg was at top, the hysteresis zone update can
-    // transition top->mid first (eccentric) before mid->bottom on the next
-    // frame. The key requirement is that we no longer stick to top.
-    expect(r1.repPhase, isNot(ExerciseRepPhase.top));
+      final r =
+          calc.update(pose: _poseLeft(118), timestamp: _t, endSet: true)!;
+      expect(r.setStage, ExerciseSetStage.rest);
+      expect(r.repPhase, ExerciseRepPhase.unknown);
+    });
 
-    final r2 = calc.update(pose: rightOnly, timestamp: t0)!;
-    expect(r2.setStage, ExerciseSetStage.active);
-    expect(r2.repPhase, ExerciseRepPhase.bottom);
+    test('reps accumulate across sets; reset() clears everything', () {
+      final calc = _calc();
+
+      // Set 1: 1 rep.
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      calc.update(pose: _poseLeft(118), timestamp: _t);
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      calc.update(pose: _poseLeft(170), timestamp: _t);
+      calc.update(pose: _poseLeft(170), timestamp: _t, endSet: true);
+
+      // Set 2: 1 more rep → total 2.
+      calc.update(pose: _poseLeft(170), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      calc.update(pose: _poseLeft(118), timestamp: _t);
+      calc.update(pose: _poseLeft(145), timestamp: _t);
+      final r = calc.update(pose: _poseLeft(170), timestamp: _t)!;
+      expect(r.reps, 2);
+
+      calc.reset();
+      expect(
+        calc.update(pose: _poseLeft(170), timestamp: _t)!.reps,
+        0,
+      );
+    });
   });
 }
