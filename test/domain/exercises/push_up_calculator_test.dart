@@ -8,657 +8,290 @@ import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_rep_pha
 import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_set_stage.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/set_lifecycle_controller.dart';
 
-PoseLandmark _lm(PoseLandmarkType type, double x, double y) {
-  return PoseLandmark(type: type, x: x, y: y, z: 0, likelihood: 1);
-}
+// ── Pose builders ─────────────────────────────────────────────────────────────
 
-/// Builds a left-only pose with exact elbow angle, knee angle, and torso
-/// incline.
-///
-/// Geometry derivation:
-///
-/// Torso: hip at (0,0), shoulder at (cos(tRad), −sin(tRad)).
-///   → |dx| = cos(tRad), |dy| = sin(tRad) → incline = tRad ✓
-///
-/// Arm (vertex at elbow): elbow at (cos(tRad)+1, −sin(tRad)).
-///   BA = shoulder − elbow = (−1, 0).
-///   We want angle = elbowDeg → BC = (−cos(eRad), sin(eRad)).
-///   wrist = elbow + BC.
-///   Verify: dot(BA, BC) = cos(eRad), |BA|=|BC|=1 → angle = eRad ✓
-///
-/// Leg (vertex at knee): knee at (−1, 0), hip at (0, 0).
-///   BA = hip − knee = (1, 0).
-///   BC = (cos(kRad), sin(kRad)).
-///   ankle = knee + BC.
-///   Verify: dot(BA, BC) = cos(kRad), |BA|=|BC|=1 → angle = kRad ✓
-Pose _plankLeft({
-  required double elbowDeg,
-  required double kneeDeg,
-  required double torsoInclineDeg,
-}) {
-  final eRad = elbowDeg * math.pi / 180;
-  final kRad = kneeDeg * math.pi / 180;
-  final tRad = torsoInclineDeg * math.pi / 180;
+PoseLandmark _lm(PoseLandmarkType type, double x, double y) =>
+    PoseLandmark(type: type, x: x, y: y, z: 0, likelihood: 1);
 
-  final shoulderX = math.cos(tRad);
-  final shoulderY = -math.sin(tRad);
-
-  final elbowX = shoulderX + 1;
-  final elbowY = shoulderY;
-
-  final wristX = elbowX - math.cos(eRad);
-  final wristY = elbowY + math.sin(eRad);
-
-  const hipX = 0.0, hipY = 0.0;
-  const kneeX = -1.0, kneeY = 0.0;
-  final ankleX = kneeX + math.cos(kRad);
-  final ankleY = kneeY + math.sin(kRad);
-
+/// Left arm only. Shoulder at (1, 0), elbow at origin, wrist at (cos θ, sin θ).
+/// Gives shoulder→elbow→wrist angle = deg.
+Pose _poseLeft(double deg) {
+  final rad = deg * math.pi / 180;
   return Pose(landmarks: {
-    PoseLandmarkType.leftShoulder:
-        _lm(PoseLandmarkType.leftShoulder, shoulderX, shoulderY),
-    PoseLandmarkType.leftElbow: _lm(PoseLandmarkType.leftElbow, elbowX, elbowY),
-    PoseLandmarkType.leftWrist: _lm(PoseLandmarkType.leftWrist, wristX, wristY),
-    PoseLandmarkType.leftHip: _lm(PoseLandmarkType.leftHip, hipX, hipY),
-    PoseLandmarkType.leftKnee: _lm(PoseLandmarkType.leftKnee, kneeX, kneeY),
-    PoseLandmarkType.leftAnkle:
-        _lm(PoseLandmarkType.leftAnkle, ankleX, ankleY),
-  });
-}
-
-/// Builds a pose with both arms, controlled by segment scale to drive arm
-/// selection. Legs are straight (kneeDeg = 170) and torso is horizontal (5°).
-///
-/// [leftScale]/[rightScale] stretch each arm's segments; larger scale →
-/// longer combined length → selected as best arm.
-Pose _poseBothArms({
-  required double leftElbowDeg,
-  required double leftScale,
-  required double rightElbowDeg,
-  required double rightScale,
-}) {
-  final le = leftElbowDeg * math.pi / 180;
-  final re = rightElbowDeg * math.pi / 180;
-  const kRad = 170 * math.pi / 180;
-  const tRad = 5 * math.pi / 180;
-
-  // Left arm at origin.
-  final lShoulderX = math.cos(tRad);
-  final lShoulderY = -math.sin(tRad);
-  final lElbowX = lShoulderX + leftScale;
-  final lElbowY = lShoulderY;
-  final lWristX = lElbowX - leftScale * math.cos(le);
-  final lWristY = lElbowY + leftScale * math.sin(le);
-
-  // Right arm offset to the right.
-  const offset = 20.0;
-  final rShoulderX = offset + math.cos(tRad);
-  final rShoulderY = -math.sin(tRad);
-  final rElbowX = rShoulderX + rightScale;
-  final rElbowY = rShoulderY;
-  final rWristX = rElbowX - rightScale * math.cos(re);
-  final rWristY = rElbowY + rightScale * math.sin(re);
-
-  // Legs + torso on the left side only (right-side legs are not needed for
-  // these tests which focus on arm locking).
-  const hipX = 0.0, hipY = 0.0;
-  const kneeX = -1.0, kneeY = 0.0;
-  final ankleX = kneeX + math.cos(kRad);
-  final ankleY = kneeY + math.sin(kRad);
-
-  return Pose(landmarks: {
-    PoseLandmarkType.leftShoulder:
-        _lm(PoseLandmarkType.leftShoulder, lShoulderX, lShoulderY),
-    PoseLandmarkType.leftElbow:
-        _lm(PoseLandmarkType.leftElbow, lElbowX, lElbowY),
+    PoseLandmarkType.leftShoulder: _lm(PoseLandmarkType.leftShoulder, 1, 0),
+    PoseLandmarkType.leftElbow: _lm(PoseLandmarkType.leftElbow, 0, 0),
     PoseLandmarkType.leftWrist:
-        _lm(PoseLandmarkType.leftWrist, lWristX, lWristY),
-    PoseLandmarkType.rightShoulder:
-        _lm(PoseLandmarkType.rightShoulder, rShoulderX, rShoulderY),
-    PoseLandmarkType.rightElbow:
-        _lm(PoseLandmarkType.rightElbow, rElbowX, rElbowY),
-    PoseLandmarkType.rightWrist:
-        _lm(PoseLandmarkType.rightWrist, rWristX, rWristY),
-    PoseLandmarkType.leftHip: _lm(PoseLandmarkType.leftHip, hipX, hipY),
-    PoseLandmarkType.leftKnee: _lm(PoseLandmarkType.leftKnee, kneeX, kneeY),
-    PoseLandmarkType.leftAnkle:
-        _lm(PoseLandmarkType.leftAnkle, ankleX, ankleY),
+        _lm(PoseLandmarkType.leftWrist, math.cos(rad), math.sin(rad)),
   });
 }
 
-/// Pose with right-arm only (no left arm) for fallback tests.
-Pose _poseRightArmOnly({required double elbowDeg, required double kneeDeg}) {
-  final eRad = elbowDeg * math.pi / 180;
-  const tRad = 5 * math.pi / 180;
-  final kRad = kneeDeg * math.pi / 180;
+/// Both arms. Scale controls segment length used for best-arm selection.
+/// Larger scale → selected as "best visible" arm by the calculator.
+Pose _poseBothArms(
+    double leftDeg, double leftScale, double rightDeg, double rightScale) {
+  final lRad = leftDeg * math.pi / 180;
+  final rRad = rightDeg * math.pi / 180;
+  const rOff = 10.0;
+  return Pose(landmarks: {
+    PoseLandmarkType.leftShoulder:
+        _lm(PoseLandmarkType.leftShoulder, leftScale, 0),
+    PoseLandmarkType.leftElbow: _lm(PoseLandmarkType.leftElbow, 0, 0),
+    PoseLandmarkType.leftWrist: _lm(PoseLandmarkType.leftWrist,
+        leftScale * math.cos(lRad), leftScale * math.sin(lRad)),
+    PoseLandmarkType.rightShoulder:
+        _lm(PoseLandmarkType.rightShoulder, rOff + rightScale, 0),
+    PoseLandmarkType.rightElbow: _lm(PoseLandmarkType.rightElbow, rOff, 0),
+    PoseLandmarkType.rightWrist: _lm(PoseLandmarkType.rightWrist,
+        rOff + rightScale * math.cos(rRad), rightScale * math.sin(rRad)),
+  });
+}
 
-  final rShoulderX = math.cos(tRad);
-  final rShoulderY = -math.sin(tRad);
-  final rElbowX = rShoulderX + 1;
-  final rElbowY = rShoulderY;
-  final rWristX = rElbowX - math.cos(eRad);
-  final rWristY = rElbowY + math.sin(eRad);
-
-  const hipX = 0.0, hipY = 0.0;
-  const kneeX = -1.0, kneeY = 0.0;
-  final ankleX = kneeX + math.cos(kRad);
-  final ankleY = kneeY + math.sin(kRad);
-
-  // Use right-side hip/knee/ankle for the leg chain.
-  const rHipX = 5.0, rHipY = 0.0;
-  const rKneeX = 4.0, rKneeY = 0.0;
-  final rAnkleX = rKneeX + math.cos(kRad);
-  final rAnkleY = rKneeY + math.sin(kRad);
-
+/// Right arm only — left arm landmarks absent.
+Pose _poseRight(double deg) {
+  final rad = deg * math.pi / 180;
+  const rOff = 10.0;
   return Pose(landmarks: {
     PoseLandmarkType.rightShoulder:
-        _lm(PoseLandmarkType.rightShoulder, rShoulderX, rShoulderY),
-    PoseLandmarkType.rightElbow:
-        _lm(PoseLandmarkType.rightElbow, rElbowX, rElbowY),
-    PoseLandmarkType.rightWrist:
-        _lm(PoseLandmarkType.rightWrist, rWristX, rWristY),
-    // Include right-side hip for torso incline (shoulder is already placed above).
-    PoseLandmarkType.rightHip: _lm(PoseLandmarkType.rightHip, rHipX, rHipY),
-    PoseLandmarkType.rightKnee:
-        _lm(PoseLandmarkType.rightKnee, rKneeX, rKneeY),
-    PoseLandmarkType.rightAnkle:
-        _lm(PoseLandmarkType.rightAnkle, rAnkleX, rAnkleY),
-    // Left leg present but no left arm (to simulate occlusion).
-    PoseLandmarkType.leftHip: _lm(PoseLandmarkType.leftHip, hipX, hipY),
-    PoseLandmarkType.leftKnee: _lm(PoseLandmarkType.leftKnee, kneeX, kneeY),
-    PoseLandmarkType.leftAnkle:
-        _lm(PoseLandmarkType.leftAnkle, ankleX, ankleY),
+        _lm(PoseLandmarkType.rightShoulder, rOff + 1, 0),
+    PoseLandmarkType.rightElbow: _lm(PoseLandmarkType.rightElbow, rOff, 0),
+    PoseLandmarkType.rightWrist: _lm(
+        PoseLandmarkType.rightWrist, rOff + math.cos(rad), math.sin(rad)),
   });
 }
 
-SetLifecycleController _noDelayLifecycle() => SetLifecycleController(
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+SetLifecycleController _lifecycle() => SetLifecycleController(
       countdownDuration: Duration.zero,
       endSetGraceDuration: Duration.zero,
     );
 
+PushUpCalculator _calc() => PushUpCalculator(lifecycle: _lifecycle());
+
+final _t = DateTime(2026, 1, 1);
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 void main() {
-  // ── Prepare pose gate tests ─────────────────────────────────────────────
-
-  group('prepare pose', () {
-    test('accepts full plank alignment', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      // elbow=170°, knee=165°, torso=10° → all gates pass.
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r.setStage, ExerciseSetStage.countdown);
-    });
-
-    test('rejects when arms bent (elbow < 160°)', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 140, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r.setStage, ExerciseSetStage.rest);
-    });
-
-    test('rejects when legs bent (knee < 155°)', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 130, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r.setStage, ExerciseSetStage.rest);
-    });
-
-    test('rejects when torso not horizontal (incline > 30°)', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 50),
-        timestamp: t0,
-      )!;
-      expect(r.setStage, ExerciseSetStage.rest);
-    });
-
-    test('aborts countdown when plank is broken', () {
-      final lifecycle = SetLifecycleController(
-        countdownDuration: const Duration(seconds: 3),
-        endSetGraceDuration: Duration.zero,
-      );
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      // Enter countdown.
-      final r0 = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r0.setStage, ExerciseSetStage.countdown);
-
-      // Break plank (elbow drops).
-      final r1 = calc.update(
-        pose: _plankLeft(elbowDeg: 130, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r1.setStage, ExerciseSetStage.rest);
-    });
-  });
-
-  // ── Rep counting ────────────────────────────────────────────────────────
+  // Thresholds (from PushUpCalculator):
+  //   top    entry=155°  exit=145°
+  //   bottom entry=95°   exit=103°
+  //
+  // Zone transitions require 2 frames: one exits the current zone → mid,
+  // the next enters the new zone. Angle guide:
+  //   top=165°  mid=125°  bottom=80°
 
   group('rep counting', () {
-    test('counts 1 rep for top → bottom → top', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
+    test('top → bottom → top counts 1 rep', () {
+      final calc = _calc();
 
-      // Plank → countdown → active.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      final rActive = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rActive.setStage, ExerciseSetStage.active);
-      expect(rActive.repPhase, ExerciseRepPhase.top);
-      expect(rActive.reps, 0);
+      final r0 =
+          calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true)!;
+      expect(r0.setStage, ExerciseSetStage.active);
+      expect(r0.repPhase, ExerciseRepPhase.top);
+      expect(r0.reps, 0);
 
-      // Eccentric (lowering).
-      final rEcc = calc.update(
-        pose: _plankLeft(elbowDeg: 130, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rEcc.repPhase, ExerciseRepPhase.eccentric);
-      expect(rEcc.reps, 0);
+      calc.update(pose: _poseLeft(125), timestamp: _t); // top → mid (eccentric)
+      calc.update(pose: _poseLeft(80), timestamp: _t);  // mid → bottom
+      calc.update(pose: _poseLeft(125), timestamp: _t); // bottom → mid (concentric)
+      final r = calc.update(pose: _poseLeft(165), timestamp: _t)!; // mid → top
+      expect(r.repPhase, ExerciseRepPhase.top);
+      expect(r.reps, 1);
 
-      // Bottom.
-      final rBot = calc.update(
-        pose: _plankLeft(elbowDeg: 80, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rBot.repPhase, ExerciseRepPhase.bottom);
-      expect(rBot.reps, 0);
-
-      // Concentric (pressing up).
-      final rCon = calc.update(
-        pose: _plankLeft(elbowDeg: 130, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rCon.repPhase, ExerciseRepPhase.concentric);
-      expect(rCon.reps, 0);
-
-      // Top → rep counted.
-      final rTop = calc.update(
-        pose: _plankLeft(elbowDeg: 165, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rTop.repPhase, ExerciseRepPhase.top);
-      expect(rTop.reps, 1);
-
-      // Holding top does not double-count.
-      final rStay = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rStay.repPhase, ExerciseRepPhase.top);
-      expect(rStay.reps, 1);
+      // Holding top must not double-count.
+      expect(calc.update(pose: _poseLeft(170), timestamp: _t)!.reps, 1);
     });
 
-    test('does not count without reaching bottom', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
+    test('partial descent without reaching bottom counts 0 reps', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
 
-      // Start set.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Partial descent — never hits ≤ 90°.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 120, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 165, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
+      // 125° is above bottomEntryDeg=95 → never enters bottom zone.
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      final r = calc.update(pose: _poseLeft(165), timestamp: _t)!;
       expect(r.reps, 0);
     });
 
-    test('counts multiple reps correctly', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
+    test('3 reps count correctly', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
 
       for (var i = 0; i < 3; i++) {
-        calc.update(
-            pose: _plankLeft(elbowDeg: 80, kneeDeg: 165, torsoInclineDeg: 10),
-            timestamp: t0);
-        calc.update(
-            pose: _plankLeft(elbowDeg: 165, kneeDeg: 165, torsoInclineDeg: 10),
-            timestamp: t0);
+        calc.update(pose: _poseLeft(125), timestamp: _t); // top → mid
+        calc.update(pose: _poseLeft(80), timestamp: _t);  // mid → bottom
+        calc.update(pose: _poseLeft(125), timestamp: _t); // bottom → mid
+        calc.update(pose: _poseLeft(165), timestamp: _t); // mid → top → rep+1
       }
-
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r.reps, 3);
+      expect(calc.update(pose: _poseLeft(165), timestamp: _t)!.reps, 3);
     });
   });
 
-  // ── Hysteresis ───────────────────────────────────────────────────────────
+  group('phase detection', () {
+    test('repPhase is unknown when set is not active', () {
+      final r = _calc().update(pose: _poseLeft(165), timestamp: _t)!;
+      expect(r.setStage, ExerciseSetStage.rest);
+      expect(r.repPhase, ExerciseRepPhase.unknown);
+    });
+
+    test('repPhase is unknown before any zone extreme is confirmed', () {
+      final calc = _calc();
+      // Start at mid angle — neither top nor bottom zone entered yet.
+      final r =
+          calc.update(pose: _poseLeft(125), timestamp: _t, startSet: true)!;
+      expect(r.repPhase, ExerciseRepPhase.unknown);
+    });
+
+    test('mid zone after bottom confirmed is concentric', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      calc.update(pose: _poseLeft(80), timestamp: _t); // confirm bottom
+      final r = calc.update(pose: _poseLeft(125), timestamp: _t)!; // bottom → mid
+      expect(r.repPhase, ExerciseRepPhase.concentric);
+    });
+
+    test('mid zone after top confirmed is eccentric', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true); // top
+      final r = calc.update(pose: _poseLeft(125), timestamp: _t)!; // top → mid
+      expect(r.repPhase, ExerciseRepPhase.eccentric);
+    });
+  });
 
   group('hysteresis', () {
-    test('stays in top phase until elbow drops below 155°', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
+    test('stays in top zone until elbow drops below exit threshold (145°)', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
 
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Just inside hysteresis band → still top.
-      final r1 = calc.update(
-        pose: _plankLeft(elbowDeg: 157, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r1.repPhase, ExerciseRepPhase.top);
-
-      // Past hysteresis exit → leaves top.
-      final r2 = calc.update(
-        pose: _plankLeft(elbowDeg: 153, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r2.repPhase, ExerciseRepPhase.eccentric);
+      // 147° is above topExitDeg=145 → still in top.
+      expect(
+        calc.update(pose: _poseLeft(147), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.top,
+      );
+      // 143° drops below topExitDeg=145 → exits to mid.
+      expect(
+        calc.update(pose: _poseLeft(143), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.eccentric,
+      );
     });
 
-    test('stays in bottom phase until elbow rises above 95°', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
+    test('stays in bottom zone until elbow rises above exit threshold (103°)',
+        () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      calc.update(pose: _poseLeft(80), timestamp: _t); // in bottom
 
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Reach bottom.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 80, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Just inside hysteresis band → still bottom.
-      final r1 = calc.update(
-        pose: _plankLeft(elbowDeg: 93, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r1.repPhase, ExerciseRepPhase.bottom);
-
-      // Past exit → concentric.
-      final r2 = calc.update(
-        pose: _plankLeft(elbowDeg: 97, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(r2.repPhase, ExerciseRepPhase.concentric);
+      // 101° is below bottomExitDeg=103 → still in bottom.
+      expect(
+        calc.update(pose: _poseLeft(101), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.bottom,
+      );
+      // 105° rises above bottomExitDeg=103 → exits to mid.
+      expect(
+        calc.update(pose: _poseLeft(105), timestamp: _t)!.repPhase,
+        ExerciseRepPhase.concentric,
+      );
     });
   });
 
-  // ── Jitter resistance ────────────────────────────────────────────────────
+  group('missing landmarks', () {
+    test('frame with no arm landmarks is skipped; state is preserved', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
 
-  group('jitter resistance', () {
-    test('small jitter below deadband does not flip eccentric phase', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Going down → eccentric.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 145, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      final rEcc = calc.update(
-        pose: _plankLeft(elbowDeg: 135, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rEcc.repPhase, ExerciseRepPhase.eccentric);
-
-      // Tiny jitter up (< 2° deadband) → still eccentric.
-      final rJitter = calc.update(
-        pose: _plankLeft(elbowDeg: 136, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rJitter.repPhase, ExerciseRepPhase.eccentric);
-
-      // Clear upward movement → switches to concentric.
-      final rRev = calc.update(
-        pose: _plankLeft(elbowDeg: 141, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
-      )!;
-      expect(rRev.repPhase, ExerciseRepPhase.concentric);
-    });
-  });
-
-  // ── Break pose ───────────────────────────────────────────────────────────
-
-  group('break pose', () {
-    test('fires after knee collapse is held for 500 ms', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      // Start set.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      expect(lifecycle.stage, ExerciseSetStage.active);
-
-      // t1: knee first collapses (user drops to knee-rest, kneeDeg = 100°).
-      // _kneeCollapseSince = t1; hold has not elapsed → still active.
-      final t1 = t0.add(const Duration(milliseconds: 100));
-      final rSoon = calc.update(
-        pose: _plankLeft(elbowDeg: 100, kneeDeg: 100, torsoInclineDeg: 10),
-        timestamp: t1,
-      )!;
-      expect(rSoon.setStage, ExerciseSetStage.active);
-
-      // t2: 300 ms after collapse start — still below the 500 ms hold.
-      final t2 = t0.add(const Duration(milliseconds: 400));
-      final rStill = calc.update(
-        pose: _plankLeft(elbowDeg: 100, kneeDeg: 100, torsoInclineDeg: 10),
-        timestamp: t2,
-      )!;
-      expect(rStill.setStage, ExerciseSetStage.active);
-
-      // t3: 600 ms after collapse start — hold elapsed → set ends.
-      final t3 = t0.add(const Duration(milliseconds: 700));
-      final rBreak = calc.update(
-        pose: _plankLeft(elbowDeg: 100, kneeDeg: 100, torsoInclineDeg: 10),
-        timestamp: t3,
-      )!;
-      expect(rBreak.setStage, ExerciseSetStage.rest);
-      expect(rBreak.didEndSetByBreakPose, isTrue);
-    });
-
-    test('does NOT fire at push-up bottom when knees stay straight', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      // Start set.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Push-up bottom: elbow collapses to 75°, but knees are still straight
-      // at 165°.
-      final tBottom = t0.add(const Duration(milliseconds: 800));
-      final rBot = calc.update(
-        pose: _plankLeft(elbowDeg: 75, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: tBottom,
-      )!;
-      expect(rBot.setStage, ExerciseSetStage.active);
-      expect(rBot.repPhase, ExerciseRepPhase.bottom);
-    });
-
-    test('hold timer resets if knee recovers before 500 ms', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      // Start set.
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-
-      // Knee drops briefly.
-      calc.update(
-        pose: _plankLeft(elbowDeg: 100, kneeDeg: 100, torsoInclineDeg: 10),
-        timestamp: t0.add(const Duration(milliseconds: 200)),
-      );
-
-      // Knee recovers (resets hold timer).
-      calc.update(
-        pose: _plankLeft(elbowDeg: 165, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0.add(const Duration(milliseconds: 300)),
-      );
-
-      // Knee drops again: hold timer restarts from this point.
-      calc.update(
-        pose: _plankLeft(elbowDeg: 100, kneeDeg: 100, torsoInclineDeg: 10),
-        timestamp: t0.add(const Duration(milliseconds: 400)),
-      );
-
-      // Only 200 ms since the new collapse start → still active.
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 100, kneeDeg: 100, torsoInclineDeg: 10),
-        timestamp: t0.add(const Duration(milliseconds: 600)),
-      )!;
-      // 600 - 400 = 200 ms elapsed since new collapse start (< 500 ms).
+      final r = calc.update(pose: Pose(landmarks: {}), timestamp: _t)!;
       expect(r.setStage, ExerciseSetStage.active);
+      expect(r.repPhase, ExerciseRepPhase.top); // preserved
+      expect(r.reps, 0);
     });
   });
-
-  // ── Arm locking ──────────────────────────────────────────────────────────
 
   group('arm locking', () {
-    test('locks best arm at set start; ignores flipped best arm', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
+    test('locks best arm at set start and ignores score flip mid-set', () {
+      final calc = _calc();
+      // Left arm (scale=2, top angle) is best; right arm (scale=1, bottom angle).
+      final start = _poseBothArms(165, 2.0, 80, 1.0);
+      final r0 = calc.update(pose: start, timestamp: _t, startSet: true)!;
+      expect(r0.repPhase, ExerciseRepPhase.top); // left arm used
 
-      // Left arm is best (larger scale) and extended (top phase).
-      // Right arm is bent (bottom-like). If selection flips, phase would change.
-      final startPose = _poseBothArms(
-        leftElbowDeg: 170,
-        leftScale: 2.0,
-        rightElbowDeg: 75,
-        rightScale: 1.0,
+      // Flip scores: right now has scale=2 (would be "best" without locking).
+      final flipped = _poseBothArms(165, 1.0, 80, 2.0);
+      expect(
+        calc.update(pose: flipped, timestamp: _t)!.repPhase,
+        ExerciseRepPhase.top, // still locked to left
       );
-
-      calc.update(pose: startPose, timestamp: t0);
-      final rActive = calc.update(pose: startPose, timestamp: t0)!;
-      expect(rActive.setStage, ExerciseSetStage.active);
-      expect(rActive.repPhase, ExerciseRepPhase.top);
-
-      // Swap scores so right would now be the "best" arm if not locked.
-      final flippedPose = _poseBothArms(
-        leftElbowDeg: 170,
-        leftScale: 1.0,
-        rightElbowDeg: 75,
-        rightScale: 2.0,
-      );
-
-      final r1 = calc.update(pose: flippedPose, timestamp: t0)!;
-      // Still top → locked to left arm.
-      expect(r1.repPhase, ExerciseRepPhase.top);
     });
 
-    test('falls back to best arm if locked arm disappears', () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
+    test('falls back to visible arm when locked arm disappears', () {
+      final calc = _calc();
+      calc.update(
+          pose: _poseBothArms(165, 2.0, 80, 1.0),
+          timestamp: _t,
+          startSet: true); // locks left at top
 
-      // Start with left arm locked (extended/top), right arm bent (bottom-like).
-      final startPose = _poseBothArms(
-        leftElbowDeg: 170,
-        leftScale: 2.0,
-        rightElbowDeg: 75,
-        rightScale: 1.0,
-      );
-      calc.update(pose: startPose, timestamp: t0);
-      calc.update(pose: startPose, timestamp: t0);
-
-      // Left arm disappears → only right arm (bent, bottom-like) remains.
-      final rightOnly = _poseRightArmOnly(elbowDeg: 75, kneeDeg: 165);
-      final r1 = calc.update(pose: rightOnly, timestamp: t0)!;
-      expect(r1.setStage, ExerciseSetStage.active);
-      // Phase should no longer be top (right arm is at bottom-like angle).
-      expect(r1.repPhase, isNot(ExerciseRepPhase.top));
+      // Left disappears; only right arm (at 80° = bottom angle) remains.
+      calc.update(pose: _poseRight(80), timestamp: _t); // exits top → mid
+      final r = calc.update(pose: _poseRight(80), timestamp: _t)!; // mid → bottom
+      expect(r.repPhase, ExerciseRepPhase.bottom);
     });
   });
 
-  // ── Metrics ──────────────────────────────────────────────────────────────
-
   group('metrics', () {
-    test('emits elbow, knee, and torso incline metrics when landmarks present',
-        () {
-      final lifecycle = _noDelayLifecycle();
-      final calc = PushUpCalculator(lifecycle: lifecycle);
-      final t0 = DateTime(2026, 1, 1);
-
-      calc.update(
-          pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-          timestamp: t0);
-      final r = calc.update(
-        pose: _plankLeft(elbowDeg: 170, kneeDeg: 165, torsoInclineDeg: 10),
-        timestamp: t0,
+    test('emits leftElbowDeg and rightElbowDeg when both arms present', () {
+      final r = _calc().update(
+        pose: _poseBothArms(165, 1.0, 165, 1.0),
+        timestamp: _t,
+        startSet: true,
       )!;
-
       expect(r.metrics[ExerciseMetric.leftElbowDeg], isNotNull);
-      expect(r.metrics[ExerciseMetric.leftKneeDeg], isNotNull);
-      expect(r.metrics[ExerciseMetric.torsoInclineDeg], isNotNull);
+      expect(r.metrics[ExerciseMetric.rightElbowDeg], isNotNull);
+    });
+
+    test('emits only leftElbowDeg when only left arm is visible', () {
+      final r =
+          _calc().update(pose: _poseLeft(165), timestamp: _t, startSet: true)!;
+      expect(r.metrics[ExerciseMetric.leftElbowDeg], isNotNull);
+      expect(r.metrics[ExerciseMetric.rightElbowDeg], isNull);
+    });
+  });
+
+  group('lifecycle', () {
+    test('endSet transitions to rest and clears phase', () {
+      final calc = _calc();
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(125), timestamp: _t); // eccentric
+
+      final r =
+          calc.update(pose: _poseLeft(125), timestamp: _t, endSet: true)!;
+      expect(r.setStage, ExerciseSetStage.rest);
+      expect(r.repPhase, ExerciseRepPhase.unknown);
+    });
+
+    test('reps accumulate across sets; reset() clears everything', () {
+      final calc = _calc();
+
+      // Set 1: 1 rep.
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      calc.update(pose: _poseLeft(80), timestamp: _t);
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      calc.update(pose: _poseLeft(165), timestamp: _t);
+      calc.update(pose: _poseLeft(165), timestamp: _t, endSet: true);
+
+      // Set 2: 1 more rep → total 2.
+      calc.update(pose: _poseLeft(165), timestamp: _t, startSet: true);
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      calc.update(pose: _poseLeft(80), timestamp: _t);
+      calc.update(pose: _poseLeft(125), timestamp: _t);
+      final r = calc.update(pose: _poseLeft(165), timestamp: _t)!;
+      expect(r.reps, 2);
+
+      calc.reset();
+      expect(
+        calc.update(pose: _poseLeft(165), timestamp: _t)!.reps,
+        0,
+      );
     });
   });
 }

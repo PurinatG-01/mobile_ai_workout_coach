@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import 'package:mobile_ai_workout_coach/domain/exercises/calculators/bicep_curl_calculator.dart';
+import 'package:mobile_ai_workout_coach/domain/exercises/calculators/pull_up_calculator.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_metric.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_rep_phase.dart';
 import 'package:mobile_ai_workout_coach/domain/exercises/models/exercise_set_stage.dart';
@@ -64,29 +64,29 @@ SetLifecycleController _lifecycle() => SetLifecycleController(
       endSetGraceDuration: Duration.zero,
     );
 
-BicepCurlCalculator _calc() => BicepCurlCalculator(lifecycle: _lifecycle());
+PullUpCalculator _calc() => PullUpCalculator(lifecycle: _lifecycle());
 
 final _t = DateTime(2026, 1, 1);
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  // Thresholds (from BicepCurlCalculator):
-  //   extended (bottom) entry=150°  exit=143°
-  //   curled   (top)    entry=65°   exit=72°
+  // Thresholds (from PullUpCalculator):
+  //   bottom (hanging/extended) entry=150°  exit=143°
+  //   top    (pulled-up/bent)   entry=70°   exit=78°
   //
   // Zone transitions require 2 frames: one exits the current zone → mid,
   // the next enters the new zone. Angle guide:
-  //   bottom=160°  mid=100°  top=55°
+  //   bottom=160°  mid=110°  top=60°
   //
   // Entry into a zone requires BOTH arms to clear the threshold.
   // Exit is triggered when EITHER arm leaves the hysteresis band.
 
   group('rep counting', () {
-    test('extended → curled counts 1 rep', () {
+    test('hanging (bottom) → pulled up (top) counts 1 rep', () {
       final calc = _calc();
 
-      // Start at extended (bottom zone).
+      // Start hanging — both arms extended (bottom zone).
       final r0 = calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true)!;
       expect(r0.setStage, ExerciseSetStage.active);
@@ -94,26 +94,26 @@ void main() {
       expect(r0.reps, 0);
 
       calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t); // bottom → mid
+          pose: _poseBothArms(110, 110), timestamp: _t); // bottom → mid
       final r = calc.update(
-          pose: _poseBothArms(55, 55), timestamp: _t)!; // mid → top → rep
+          pose: _poseBothArms(60, 60), timestamp: _t)!; // mid → top → rep
       expect(r.repPhase, ExerciseRepPhase.top);
       expect(r.reps, 1);
 
       // Holding top must not double-count.
       expect(
-          calc.update(pose: _poseBothArms(55, 55), timestamp: _t)!.reps, 1);
+          calc.update(pose: _poseBothArms(60, 60), timestamp: _t)!.reps, 1);
     });
 
-    test('curl without first reaching extended counts 0 reps', () {
+    test('pulled up without first hanging counts 0 reps', () {
       final calc = _calc();
       // Start at mid — bottom zone never confirmed.
       calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t, startSet: true);
+          pose: _poseBothArms(110, 110), timestamp: _t, startSet: true);
 
-      calc.update(pose: _poseBothArms(55, 55), timestamp: _t); // mid → top
+      calc.update(pose: _poseBothArms(60, 60), timestamp: _t); // mid → top
       final r =
-          calc.update(pose: _poseBothArms(55, 55), timestamp: _t)!; // stays top
+          calc.update(pose: _poseBothArms(60, 60), timestamp: _t)!; // stays top
       expect(r.reps, 0);
     });
 
@@ -123,9 +123,9 @@ void main() {
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
 
       for (var i = 0; i < 3; i++) {
-        calc.update(pose: _poseBothArms(100, 100), timestamp: _t); // bottom → mid
-        calc.update(pose: _poseBothArms(55, 55), timestamp: _t);   // mid → top → rep+1
-        calc.update(pose: _poseBothArms(100, 100), timestamp: _t); // top → mid
+        calc.update(pose: _poseBothArms(110, 110), timestamp: _t); // bottom → mid
+        calc.update(pose: _poseBothArms(60, 60), timestamp: _t);   // mid → top → rep+1
+        calc.update(pose: _poseBothArms(110, 110), timestamp: _t); // top → mid
         calc.update(pose: _poseBothArms(160, 160), timestamp: _t); // mid → bottom (re-armed)
       }
       expect(
@@ -144,27 +144,27 @@ void main() {
       final calc = _calc();
       // Start at mid — no extreme confirmed yet.
       final r = calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t, startSet: true)!;
+          pose: _poseBothArms(110, 110), timestamp: _t, startSet: true)!;
       expect(r.repPhase, ExerciseRepPhase.unknown);
     });
 
-    test('mid zone after extended (bottom) is concentric', () {
+    test('mid zone after hanging (bottom) confirmed is concentric', () {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
       final r = calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t)!; // bottom → mid
+          pose: _poseBothArms(110, 110), timestamp: _t)!; // bottom → mid
       expect(r.repPhase, ExerciseRepPhase.concentric);
     });
 
-    test('mid zone after curled (top) is eccentric', () {
+    test('mid zone after pulled-up (top) confirmed is eccentric', () {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      calc.update(pose: _poseBothArms(100, 100), timestamp: _t);
-      calc.update(pose: _poseBothArms(55, 55), timestamp: _t); // confirm top
+      calc.update(pose: _poseBothArms(110, 110), timestamp: _t);
+      calc.update(pose: _poseBothArms(60, 60), timestamp: _t); // confirm top
       final r = calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t)!; // top → mid
+          pose: _poseBothArms(110, 110), timestamp: _t)!; // top → mid
       expect(r.repPhase, ExerciseRepPhase.eccentric);
     });
   });
@@ -174,8 +174,8 @@ void main() {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      // Confirmed bottom zone. Now left arm disappears.
-      final r = calc.update(pose: _poseRightOnly(100), timestamp: _t)!;
+      // Confirmed bottom. Left arm disappears.
+      final r = calc.update(pose: _poseRightOnly(110), timestamp: _t)!;
       // State preserved: still in bottom zone.
       expect(r.repPhase, ExerciseRepPhase.bottom);
       expect(r.reps, 0);
@@ -185,7 +185,7 @@ void main() {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      final r = calc.update(pose: _poseLeftOnly(100), timestamp: _t)!;
+      final r = calc.update(pose: _poseLeftOnly(110), timestamp: _t)!;
       expect(r.repPhase, ExerciseRepPhase.bottom);
       expect(r.reps, 0);
     });
@@ -194,23 +194,22 @@ void main() {
       final calc = _calc();
       // Start at mid (no extreme confirmed).
       calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t, startSet: true);
+          pose: _poseBothArms(110, 110), timestamp: _t, startSet: true);
 
-      // Left arm at extended threshold (160°), right arm still in mid (100°).
-      // Entry requires BOTH ≥ 150° → zone stays mid.
+      // Left at 160° (≥ entry 150°), right still at 110° — entry needs BOTH.
       final r = calc.update(
-          pose: _poseBothArms(160, 100), timestamp: _t)!;
-      expect(r.repPhase, ExerciseRepPhase.unknown);
+          pose: _poseBothArms(160, 110), timestamp: _t)!;
+      expect(r.repPhase, ExerciseRepPhase.unknown); // zone unchanged
     });
   });
 
   group('hysteresis', () {
-    test('stays in extended zone until either arm drops below exit (143°)', () {
+    test('stays in bottom zone until either arm rises above exit (143°)', () {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
 
-      // Left arm at 148° — above extendedExitDeg=143 → still in bottom.
+      // Left arm at 148° — above bottomExitDeg=143 → still in bottom.
       expect(
         calc
             .update(pose: _poseBothArms(148, 160), timestamp: _t)!
@@ -226,24 +225,24 @@ void main() {
       );
     });
 
-    test('stays in curled zone until either arm rises above exit (72°)', () {
+    test('stays in top zone until either arm drops below exit (78°)', () {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      calc.update(pose: _poseBothArms(100, 100), timestamp: _t);
-      calc.update(pose: _poseBothArms(55, 55), timestamp: _t); // confirm top
+      calc.update(pose: _poseBothArms(110, 110), timestamp: _t);
+      calc.update(pose: _poseBothArms(60, 60), timestamp: _t); // confirm top
 
-      // Left arm at 70° — below curledExitDeg=72 → still in top.
+      // Left arm at 76° — below topExitDeg=78 → still in top.
       expect(
         calc
-            .update(pose: _poseBothArms(70, 55), timestamp: _t)!
+            .update(pose: _poseBothArms(76, 60), timestamp: _t)!
             .repPhase,
         ExerciseRepPhase.top,
       );
-      // Left arm rises to 75° — above exit threshold → exits to mid.
+      // Left arm rises to 80° — above exit threshold → exits to mid.
       expect(
         calc
-            .update(pose: _poseBothArms(75, 55), timestamp: _t)!
+            .update(pose: _poseBothArms(80, 60), timestamp: _t)!
             .repPhase,
         ExerciseRepPhase.eccentric,
       );
@@ -262,8 +261,7 @@ void main() {
     });
 
     test('emits only leftElbowDeg when only left arm is visible', () {
-      final r =
-          _calc().update(pose: _poseLeftOnly(160), timestamp: _t)!;
+      final r = _calc().update(pose: _poseLeftOnly(160), timestamp: _t)!;
       expect(r.metrics[ExerciseMetric.leftElbowDeg], isNotNull);
       expect(r.metrics[ExerciseMetric.rightElbowDeg], isNull);
     });
@@ -274,10 +272,10 @@ void main() {
       final calc = _calc();
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      calc.update(pose: _poseBothArms(100, 100), timestamp: _t); // concentric
+      calc.update(pose: _poseBothArms(110, 110), timestamp: _t); // concentric
 
       final r = calc.update(
-          pose: _poseBothArms(100, 100), timestamp: _t, endSet: true)!;
+          pose: _poseBothArms(110, 110), timestamp: _t, endSet: true)!;
       expect(r.setStage, ExerciseSetStage.rest);
       expect(r.repPhase, ExerciseRepPhase.unknown);
     });
@@ -288,17 +286,17 @@ void main() {
       // Set 1: 1 rep.
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      calc.update(pose: _poseBothArms(100, 100), timestamp: _t);
-      calc.update(pose: _poseBothArms(55, 55), timestamp: _t);
+      calc.update(pose: _poseBothArms(110, 110), timestamp: _t);
+      calc.update(pose: _poseBothArms(60, 60), timestamp: _t);
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, endSet: true);
 
       // Set 2: 1 more rep → total 2.
       calc.update(
           pose: _poseBothArms(160, 160), timestamp: _t, startSet: true);
-      calc.update(pose: _poseBothArms(100, 100), timestamp: _t);
+      calc.update(pose: _poseBothArms(110, 110), timestamp: _t);
       final r =
-          calc.update(pose: _poseBothArms(55, 55), timestamp: _t)!;
+          calc.update(pose: _poseBothArms(60, 60), timestamp: _t)!;
       expect(r.reps, 2);
 
       calc.reset();
